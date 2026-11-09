@@ -1,3 +1,4 @@
+param([switch]$WithTorch)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 Write-Host 'AXIS kurulumu basliyor...' -ForegroundColor Cyan
@@ -8,8 +9,12 @@ if ($LASTEXITCODE -ne 0) { py -3.11 --version 2>$null; if ($LASTEXITCODE -ne 0) 
 $python = Join-Path $PSScriptRoot 'AXIS\.venv\Scripts\python.exe'
 & $python -m pip install --upgrade pip
 & $python -m pip install -r 'AXIS\requirements.txt'
-Write-Host 'PyTorch kuruluyor (CPU varsayilan; NVIDIA icin READMEye bakin)...' -ForegroundColor Yellow
-& $python -m pip install torch
+if ($WithTorch) {
+    Write-Host 'PyTorch kuruluyor (istege bagli; sinir agi PyTorch olmadan da calisir)...' -ForegroundColor Yellow
+    & $python -m pip install torch
+} else {
+    Write-Host 'PyTorch kurulmadi: gerekli degil. Istege bagli kurulum icin: .\KURULUM_WINDOWS.ps1 -WithTorch' -ForegroundColor DarkGray
+}
 Write-Host 'Kurulum tamamlandi. BASLAT_AXIS.bat dosyasini acin.' -ForegroundColor Green
 if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) { Write-Warning 'Ollama kurulu degil. https://ollama.com/download adresinden kurun.' } else { Write-Host 'Model indirmek icin: ollama pull qwen3:8b' }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Write-Warning 'Docker bulunamadi. Kod sandbox testleri Docker olmadan calismaz.' }
