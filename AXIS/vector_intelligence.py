@@ -11,7 +11,7 @@ def ask(messages, temperature=0.2):
     base=OLLAMA.rsplit('/api/',1)[0]
     local_models.ensure_local(MODEL,base)  # refuses cloud-backed models before any chat request
     req=urllib.request.Request(local_models.api_url('chat',base), data=json.dumps({'model':MODEL,'stream':False,'messages':messages,'options':{'temperature':temperature}}).encode(),headers={'Content-Type':'application/json'},method='POST')
-    with urllib.request.urlopen(req,timeout=180) as r:
+    with local_models.open_local(req,180) as r:  # loopback only, no proxy, no redirect
         result=json.load(r)
     return result['message']['content']
 

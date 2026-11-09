@@ -81,7 +81,7 @@ def health():
  def module(name):return importlib.util.find_spec(name) is not None
  ollama=False;cloud=[]
  try:
-  with urllib.request.urlopen(local_models.api_url('tags'),timeout=1.5) as r:
+  with local_models.open_local(local_models.api_url('tags'),1.5) as r:
    ollama=r.status==200
    cloud=[m.get('name') for m in json.load(r).get('models',[]) if isinstance(m,dict) and (local_models.is_cloud_name(m.get('name')) or local_models.is_remote(m))]
  except Exception:pass

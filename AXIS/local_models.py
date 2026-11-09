@@ -23,10 +23,26 @@ def is_cloud_name(model):
 def is_remote(metadata):
     return isinstance(metadata,dict) and bool(metadata.get('remote_host') or metadata.get('remote_model'))
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Any redirect from the local server is refused; it could point off-machine."""
+    def redirect_request(self,*args,**kwargs):
+        raise CloudModelError('Yerel Ollama yönlendirmesi reddedildi')
+
+def _opener():
+    # Proxies disabled (ignores HTTP(S)_PROXY and Windows proxy settings), redirects forbidden.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}),_NoRedirect())
+
+def open_local(req,timeout):
+    """Single seam for every Ollama request: loopback host only, no proxy, no redirect."""
+    url=req if isinstance(req,str) else req.full_url
+    host=urllib.parse.urlsplit(url).hostname
+    if host not in LOOPBACK:raise CloudModelError('Ollama adresi yalnızca yerel (127.0.0.1) olabilir: '+str(url))
+    return _opener().open(req,timeout=timeout)
+
 def _api(route,payload=None,base=BASE,timeout=15):
     data=None if payload is None else json.dumps(payload).encode()
     req=urllib.request.Request(api_url(route,base),data=data,headers={'Content-Type':'application/json'},method='GET' if payload is None else 'POST')
-    with urllib.request.urlopen(req,timeout=timeout) as r:
+    with open_local(req,timeout) as r:
         return json.load(r)
 
 def ensure_local(model,base=BASE,timeout=15):
