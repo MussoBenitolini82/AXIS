@@ -111,3 +111,6 @@ Açık engelleyici maddeler (düzeltilmeden birleştirme önerilmez):
 4. G24: Docker doğrulama zaman aşımında konteyner çalışmaya devam ediyor (vector_upgrade yolu).
 5. İki bağımsız sağlayıcı koşulunun yukarıdaki parçalı durumla karşılanıp karşılanmadığına kullanıcı kararı; qwen3 NOT RUN.
 Diğer tüm CONFIRMED maddeler düşük/orta etkili (test, belge, sertleştirme) ve engelleyici sayılmıyor.
+
+## Ek: Codex modelinin doğrulanması (2026-11-10)
+Codex oturum kayıtlarına göre Codex yazar görüşü (21:52:57Z) ve G24 Docker düzeltmesini üreten çağrılar (22:08Z) `gpt-6.1-sol` (OpenAI) ile çalıştı. GLM/Ollama bulutu kullanılmadı.

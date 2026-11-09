@@ -1,0 +1,137 @@
+diff --git a/AXIS/multi_ai_review.py b/AXIS/multi_ai_review.py
+index 393496a..321025b 100644
+--- a/AXIS/multi_ai_review.py
++++ b/AXIS/multi_ai_review.py
+@@ -15,7 +15,20 @@ ROLES = {
+     'Test Engineer': 'Propose behavioral tests, negative cases and missing coverage. Do not execute code.',
+     'Coordinator': 'Aggregate actual statuses and unresolved findings. Never infer approval from agreement.',
+ }
+-SECRET = re.compile(r'(?i)(?:api[_-]?key|password|secret|token)\s*[=:]\s*[\"\x27]?[^\s\"\x27,;]+|(?:sk-|AIza|ghp_)[A-Za-z0-9_-]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY-----')
++_KEYS = r'(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
++# Each entry is (compiled pattern, replacement). All are linear: no nested quantifiers.
++SECRET_PATTERNS = [
++    (re.compile(r'-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----.*?(?:-----END [A-Z ]{0,40}PRIVATE KEY-----|\Z)', re.S), '[REDACTED]'),
++    (re.compile(r'([A-Za-z][A-Za-z0-9+.-]{0,30}://)[^\s/@:]+:[^\s/@]+@'), r'\1[REDACTED]@'),
++    (re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}'), 'Bearer [REDACTED]'),
++    (re.compile(r'\bAKIA[0-9A-Z]{16}\b'), '[REDACTED]'),
++    (re.compile(r'github_pat_[A-Za-z0-9_]{20,}'), '[REDACTED]'),
++    (re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'), '[REDACTED]'),
++    (re.compile(r'xox[abprs]-[A-Za-z0-9-]{10,}'), '[REDACTED]'),
++    (re.compile(r'sk-[A-Za-z0-9_-]{12,}'), '[REDACTED]'),
++    (re.compile(r'AIza[0-9A-Za-z_-]{20,}'), '[REDACTED]'),
++    (re.compile(r'(?i)(["\']?' + _KEYS + r'["\']?\s*[=:]\s*)(?:"[^"\n]*"|\'[^\'\n]*\'|["\']?[^\s"\',;}]+)'), r'\1[REDACTED]'),
++]
+ ROOT = Path(__file__).resolve().parent
+ NUM_PREDICT = 4096
+ CHAT_TIMEOUT = 600  # seconds; CPU-only machines need minutes for large bundles
+@@ -30,6 +43,12 @@ class ContextTruncated(ValueError):
+ class OutputTruncated(ValueError):
+     """The model hit its output token limit; the response is incomplete."""
+ 
++class ResponseUnverifiable(ValueError):
++    """Provider metadata is missing or invalid, so completeness cannot be verified."""
++
++SEVERITIES = {'critical', 'high', 'medium', 'low', 'info'}
++FINDING_KEYS = ('severity', 'file', 'line', 'confidence', 'explanation', 'suggested_fix')
++
+ def context_limit(metadata):
+     limits = [v for k, v in (metadata.get('model_info') or {}).items()
+               if k.endswith('.context_length') and isinstance(v, int) and v > 0]
+@@ -45,21 +64,60 @@ def plan_context(prompt_chars, limit):
+         raise ContextTruncated('Review bundle exceeds model context')
+     return num_ctx
+ 
+-def check_not_truncated(response, num_ctx):
++def _is_int(v):
++    return isinstance(v, int) and not isinstance(v, bool)
++
++def check_response(response, num_ctx):
++    """Fail closed: every completeness signal must be present, valid and healthy."""
++    prompt = response.get('prompt_eval_count')
++    count = response.get('eval_count')
++    done = response.get('done_reason')
++    if not _is_int(prompt) or prompt <= 0:
++        raise ResponseUnverifiable('prompt_eval_count missing or invalid')
++    if not _is_int(count) or count < 0:
++        raise ResponseUnverifiable('eval_count missing or invalid')
+     # Ollama silently keeps only the tail of a prompt longer than num_ctx; a prompt that
+     # filled the input budget is treated as truncated.
+-    count = response.get('prompt_eval_count')
+-    if isinstance(count, int) and count >= num_ctx - NUM_PREDICT:
++    if prompt >= num_ctx - NUM_PREDICT:
+         raise ContextTruncated('Prompt filled the context window')
+-
+-def check_output_complete(response):
+-    done = response.get('done_reason')
+-    count = response.get('eval_count')
+-    if done == 'length' or (isinstance(count, int) and count >= NUM_PREDICT):
++    if done == 'length' or count >= NUM_PREDICT:
+         raise OutputTruncated('Model output reached the token limit')
++    if done != 'stop':
++        raise ResponseUnverifiable('done_reason missing or not stop')
+ 
+ def scrub(text):
+-    return SECRET.sub('[REDACTED]', text)
++    for pattern, replacement in SECRET_PATTERNS:
++        text = pattern.sub(replacement, text)
++    return text
++
++def _text(value, field, limit):
++    if not isinstance(value, str) or len(value) > limit:
++        raise ValueError('Invalid finding schema: ' + field)
++    return scrub(value)
++
++def sanitize_findings(findings):
++    """Build fresh finding dicts from validated fields only; return (clean, dropped_key_count)."""
++    clean, dropped = [], 0
++    for finding in findings:
++        if not isinstance(finding, dict):
++            raise ValueError('Invalid finding schema: finding')
++        for field in ('severity', 'file', 'line', 'confidence', 'explanation'):
++            if field not in finding:
++                raise ValueError('Invalid finding schema: ' + field)
++        severity = finding['severity']
++        if not isinstance(severity, str) or severity.lower() not in SEVERITIES:
++            raise ValueError('Invalid finding schema: severity')
++        line = finding['line']
++        if line is not None and not _is_int(line):
++            raise ValueError('Invalid finding schema: line')
++        item = dict(severity=severity.lower(), file=_text(finding['file'], 'file', 300), line=line,
++                    confidence=_text(finding['confidence'], 'confidence', 50),
++                    explanation=_text(finding['explanation'], 'explanation', 4000))
++        if 'suggested_fix' in finding:
++            item['suggested_fix'] = _text(finding['suggested_fix'], 'suggested_fix', 4000)
++        dropped += sum(1 for k in finding if k not in FINDING_KEYS)
++        clean.append(item)
++    return clean, dropped
+ 
+ def bundle(paths, root=ROOT):
+     root = root.resolve()
+@@ -135,22 +193,20 @@ def run(paths, assignments=None, output=None, api=local_api):
+                     report['done_reason'] = raw.get('done_reason')
+                     report['eval_count'] = raw.get('eval_count')
+                     received = raw['message']['content']
+-                    check_not_truncated(raw, num_ctx)
+-                    check_output_complete(raw)
++                    check_response(raw, num_ctx)
+                     result = json.loads(received)
+                     findings = result['findings']
+                     if not isinstance(findings, list) or len(findings) > 100:
+                         raise ValueError('Invalid findings')
+-                    for finding in findings:
+-                        if not isinstance(finding, dict) or not all(k in finding for k in ('severity', 'file', 'line', 'confidence', 'explanation')):
+-                            raise ValueError('Invalid finding schema')
++                    clean, dropped = sanitize_findings(findings)
+                     report.update(status='COMPLETED', reason='Actual model response received; findings unverified',
+-                                  findings=json.loads(scrub(json.dumps(findings))))
++                                  findings=clean, dropped_finding_keys=dropped)
+                 except Exception as exc:
+                     reason = type(exc).__name__
+                     if received is not None:
+                         report['raw_response_excerpt'] = scrub(str(received))[:4000]
+-                    if isinstance(exc, (ContextTruncated, OutputTruncated)):
++                    if isinstance(exc, (ContextTruncated, OutputTruncated, ResponseUnverifiable)) \
++                            or (isinstance(exc, ValueError) and str(exc).startswith('Invalid finding schema: ')):
+                         reason += ': ' + str(exc)
+                     report.update(status='FAILED', reason=reason)
+         reports.append(report)

@@ -22,3 +22,8 @@ Ham yanıt (olduğu gibi):
 ```
 
 Bulgular doğrulanmamıştır; kod ve testle doğrulama gerekir.
+
+## Model doğrulaması (2026-11-10)
+Codex oturum kaydı (`~/.codex/sessions/2026/11/10/rollout-2026-11-10T00-52-57-*.jsonl`, 21:52:57Z) bu çağrının `"model":"gpt-6.1-sol"`, `"model_provider":"openai"` ile çalıştığını gösteriyor. Yanıttaki "GPT-6" adı modelin kendi beyanıdır. Bu oturumdaki Codex çağrılarının hiçbiri GLM'de çalışmadı.
+
+Yeniden çalıştırma denemesi: Codex'ten `model: gpt-6.1-sol` açıkça verilerek dosyaları kendisinin okuması istendi. Codex `file_access: failed` döndürdü (ortam politikası), inceleme yapılmadı. Yukarıdaki yanıt geçerliliğini koruyor.

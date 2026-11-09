@@ -1,0 +1,43 @@
+diff --git a/AXIS/vector_upgrade.py b/AXIS/vector_upgrade.py
+index dd6d97d..e9d0a04 100644
+--- a/AXIS/vector_upgrade.py
++++ b/AXIS/vector_upgrade.py
+@@ -136,12 +136,19 @@ def verify(uid):
+     (p/'test_behavior.py').write_text(BEHAVIOR_RUNNER.replace('CANDIDATE',r['target']),encoding='utf-8')
+    # Deterministic built-in behavior tests; never accept agent-written tests as proof of safety.
+    script='import ast,pathlib,unittest; p=pathlib.Path("/work/'+r['target']+'"); tree=ast.parse(p.read_text()); assert len(tree.body)>0; print("SYNTAX_OK"); result=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover("/work",pattern="test_*.py")); raise SystemExit(0 if result.wasSuccessful() and result.testsRun>0 else 1)'
+-   cmd=['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
++   name=''.join(ch if ch.isalnum() and ch.isascii() or ch in '_.-' else '_' for ch in f'axis-verify-{uid[:12]}-{uuid.uuid4().hex[:8]}')
++   cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
+    try:
+     proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
+     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]
+     passed=proc.returncode==0
+-   except subprocess.TimeoutExpired:passed=False;report='FAIL: Docker test zaman aşımı'
++   except subprocess.TimeoutExpired:
++    passed=False;report='FAIL: Docker test zaman aşımı'
++    try:
++     cleanup=subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=15)
++     report+='; konteyner kaldırıldı' if cleanup.returncode==0 else '; konteyner kaldırılamadı'
++    except (OSError,subprocess.TimeoutExpired):
++     report+='; konteyner kaldırılamadı'
+   with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
+   return {'passed':passed,'report':report}
+ def decide(uid,action,confirmation=''):
+diff --git a/MULTI_AI_REVIEW.md b/MULTI_AI_REVIEW.md
+index 97ea049..b275c42 100644
+--- a/MULTI_AI_REVIEW.md
++++ b/MULTI_AI_REVIEW.md
+@@ -16,6 +16,12 @@ Bağlam penceresi: Ollama, `num_ctx` değerinden uzun bir istemin başını sess
+ 
+ Çıktı: istekte `think: false` gönderilir (qwen3 düşünme çıktısı JSON'u bozmasın). Çıktı payı 4096 token'dır; `done_reason == 'length'` ya da `eval_count` ≥ payı ise yanıt eksiktir ve rol `FAILED: OutputTruncated` olur. Raporda `done_reason` ve `eval_count` saklanır. Yanıt alındıktan sonra JSON/şema hatası olursa ham yanıtın temizlenmiş (`scrub`) ilk 4000 karakteri `raw_response_excerpt` alanına yazılır.
+ 
++Fail-closed doğrulama: `/api/chat` yanıtında `prompt_eval_count` (bool olmayan int, > 0), `eval_count` (bool olmayan int, >= 0) ve `done_reason == 'stop'` yoksa ya da geçersizse rol `FAILED: ResponseUnverifiable` olur; `OutputTruncated` ve `ContextTruncated` korunur.
++
++Bulgu şeması: bulgular serileştirilmiş JSON üzerinde `scrub` ile değil, doğrulanmış alanlardan yeni sözlükler kurularak temizlenir. Yalnızca severity (critical/high/medium/low/info; küçük harfe çevrilir), file (str, en çok 300), line (int ya da None), confidence (str, en çok 50), explanation (str, en çok 4000) ve isteğe bağlı suggested_fix (str, en çok 4000) saklanır; fazla anahtarlar atılır ve sayısı `dropped_finding_keys` alanına yazılır. Geçersiz alan rolü `FAILED` yapar, neden `ValueError: Invalid finding schema: <alan>` olur (ham model içeriği nedene yazılmaz).
++
++Maskeleme (`scrub`): password/passwd/secret/token/api_key/access_key/client_secret anahtar-değer çiftleri (tırnaklı JSON/Python biçimleri dahil; değer tırnaklarıyla birlikte), Bearer belirteçleri, AKIA, github_pat_, gh*_, xox*-, sk-, AIza anahtarları, `şema://kullanıcı:parola@sunucu` kimlik bilgileri ve çok satırlı PEM PRIVATE KEY blokları.
++
+ Programatik `run(paths, assignments)` çağrısı her role farklı model atayabilir. Rol anahtarları: Developer, Reviewer, Security Auditor, Test Engineer. Coordinator model kullanmadan özet çıkarır. Aynı modelde farklı rol istemleri bağımsız sağlayıcı incelemesi sayılmaz.
+ 
+ Her çalışma reports/ altında benzersiz bir klasör, beş görev/rol raporu ve summary.json oluşturur. Durumlar COMPLETED, FAILED veya NOT_RUN'dır. Kaynak hash'i, zaman, görev, sağlayıcı/model, bulgular ve eksik bağlantılar saklanır. Başarılı görünen model yanıtı otomatik onay değildir.
