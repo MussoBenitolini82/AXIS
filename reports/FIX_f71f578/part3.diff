@@ -1,0 +1,124 @@
+diff --git a/AXIS/test_vector_upgrade_sandbox.py b/AXIS/test_vector_upgrade_sandbox.py
+index 57cfb98..68d0485 100644
+--- a/AXIS/test_vector_upgrade_sandbox.py
++++ b/AXIS/test_vector_upgrade_sandbox.py
+@@ -58,6 +58,78 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
+             args = call[0][0] if call[0] else []
+             self.assertFalse(len(args) > 1 and args[:2] == ['docker', 'run'])
+ 
++    def test_docker_command_has_container_name(self):
++        uid = self._propose()
++        with mock.patch.object(vu, 'docker_available', return_value=True), \
++             mock.patch.object(vu.subprocess, 'run',
++                               return_value=mock.Mock(returncode=0, stdout='', stderr='')) as run:
++            vu.verify(uid)
++
++        cmd = run.call_args.args[0]
++        self.assertIn('--name', cmd)
++        name_index = cmd.index('--name')
++        self.assertEqual(name_index, cmd.index('--rm') + 1)
++        name = cmd[name_index + 1]
++        self.assertTrue(name.startswith('axis-verify-'))
++        self.assertTrue(all(ch.isascii() and (ch.isalnum() or ch in '_.-') for ch in name))
++
++    def test_timeout_removes_container(self):
++        uid = self._propose()
++
++        def timeout_then_cleanup(cmd, **kwargs):
++            if cmd[:2] == ['docker', 'run']:
++                raise vu.subprocess.TimeoutExpired(cmd, 35)
++            return mock.Mock(returncode=0)
++
++        with mock.patch.object(vu, 'docker_available', return_value=True), \
++             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup) as run:
++            result = vu.verify(uid)
++
++        self.assertEqual(run.call_count, 2)
++        first_cmd = run.call_args_list[0].args[0]
++        name = first_cmd[first_cmd.index('--name') + 1]
++        self.assertEqual(run.call_args_list[1].args, (['docker', 'rm', '-f', name],))
++        self.assertEqual(run.call_args_list[1].kwargs,
++                         {'capture_output': True, 'timeout': 15})
++        self.assertIs(result['passed'], False)
++        self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
++        self.assertIn('; konteyner kaldırıldı', result['report'])
++
++    def test_timeout_cleanup_oserror_is_reported(self):
++        uid = self._propose()
++
++        def timeout_then_cleanup_error(cmd, **kwargs):
++            if cmd[:2] == ['docker', 'run']:
++                raise vu.subprocess.TimeoutExpired(cmd, 35)
++            raise OSError('Docker cleanup failed')
++
++        with mock.patch.object(vu, 'docker_available', return_value=True), \
++             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup_error) as run:
++            result = vu.verify(uid)
++
++        self.assertEqual(run.call_count, 2)
++        first_cmd = run.call_args_list[0].args[0]
++        name = first_cmd[first_cmd.index('--name') + 1]
++        self.assertEqual(run.call_args_list[1].args, (['docker', 'rm', '-f', name],))
++        self.assertIs(result['passed'], False)
++        self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
++        self.assertIn('kaldırılamadı', result['report'])
++
++    def test_unsafe_mount_path_not_run(self):
++        for bad in ('a,readonly=false', 'a=b', 'a\x01b'):
++            with self.subTest(bad=bad):
++                uid = self._propose()
++                fake_tmp = mock.Mock()
++                fake_tmp.__enter__ = mock.Mock(return_value=str(Path(self.tmp.name) / bad))
++                fake_tmp.__exit__ = mock.Mock(return_value=False)
++                with mock.patch.object(vu, 'docker_available', return_value=True), \
++                     mock.patch.object(vu.tempfile, 'TemporaryDirectory', return_value=fake_tmp), \
++                     mock.patch.object(vu.subprocess, 'run') as run:
++                    result = vu.verify(uid)
++                run.assert_not_called()
++                self.assertEqual(result, {'passed': False, 'report': 'FAIL: güvensiz bağlama yolu'})
++                self.assertEqual(vu.detail(uid)['report'], 'FAIL: güvensiz bağlama yolu')
++
+ 
+ if __name__ == '__main__':
+     unittest.main()
+diff --git a/AXIS/vector_upgrade.py b/AXIS/vector_upgrade.py
+index dd6d97d..eef0072 100644
+--- a/AXIS/vector_upgrade.py
++++ b/AXIS/vector_upgrade.py
+@@ -128,7 +128,13 @@ def verify(uid):
+   staged=DATA/(uid+'.py');code=staged.read_text(encoding='utf-8')
+   if hashlib.sha256(code.encode()).hexdigest()!=r['digest']:raise ValueError('Kod değişmiş')
+   with tempfile.TemporaryDirectory(prefix='vector_test_') as tmp:
+-   p=Path(tmp);(p/r['target']).write_text(code,encoding='utf-8')
++   p=Path(tmp);src=str(p.resolve())
++   # Docker parses --mount as CSV key=value pairs; refuse paths that could add mount options.
++   if any(ch in ',=' or ord(ch)<32 or 127<=ord(ch)<160 for ch in src):
++    report='FAIL: güvensiz bağlama yolu'
++    with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
++    return {'passed':False,'report':report}
++   (p/r['target']).write_text(code,encoding='utf-8')
+    (p/'test_contract.py').write_text(CONTRACT_TEST,encoding='utf-8')
+    cases=behavior_cases(uid)['cases']
+    if cases:
+@@ -136,12 +142,19 @@ def verify(uid):
+     (p/'test_behavior.py').write_text(BEHAVIOR_RUNNER.replace('CANDIDATE',r['target']),encoding='utf-8')
+    # Deterministic built-in behavior tests; never accept agent-written tests as proof of safety.
+    script='import ast,pathlib,unittest; p=pathlib.Path("/work/'+r['target']+'"); tree=ast.parse(p.read_text()); assert len(tree.body)>0; print("SYNTAX_OK"); result=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover("/work",pattern="test_*.py")); raise SystemExit(0 if result.wasSuccessful() and result.testsRun>0 else 1)'
+-   cmd=['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
++   name=''.join(ch if ch.isalnum() and ch.isascii() or ch in '_.-' else '_' for ch in f'axis-verify-{uid[:12]}-{uuid.uuid4().hex[:8]}')
++   cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={src},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
+    try:
+     proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
+     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]
+     passed=proc.returncode==0
+-   except subprocess.TimeoutExpired:passed=False;report='FAIL: Docker test zaman aşımı'
++   except subprocess.TimeoutExpired:
++    passed=False;report='FAIL: Docker test zaman aşımı'
++    try:
++     cleanup=subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=15)
++     report+='; konteyner kaldırıldı' if cleanup.returncode==0 else '; konteyner kaldırılamadı'
++    except (OSError,subprocess.TimeoutExpired):
++     report+='; konteyner kaldırılamadı'
+   with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
+   return {'passed':passed,'report':report}
+ def decide(uid,action,confirmation=''):

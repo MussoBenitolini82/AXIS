@@ -16,7 +16,7 @@ ROLES = {
     'Test Engineer': 'Propose behavioral tests, negative cases and missing coverage. Do not execute code.',
     'Coordinator': 'Aggregate actual statuses and unresolved findings. Never infer approval from agreement.',
 }
-_KEYS = r'(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
+_KEYS = r'(?:password|passwd|secret(?:[_-]?key)?|private[_-]?key|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
 # Each entry is (compiled pattern, replacement). All are linear: no nested quantifiers.
 SECRET_PATTERNS = [
     (re.compile(r'-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----.*?(?:-----END [A-Z ]{0,40}PRIVATE KEY-----|\Z)', re.S), '[REDACTED]'),
@@ -171,7 +171,10 @@ def run(paths, assignments=None, output=None, api=local_api):
     directory = (output or ROOT.parent / 'reports') / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:8])
     directory.mkdir(parents=True, exist_ok=False)
     try:
-        installed = {x['name'] for x in api('tags').get('models', [])}
+        names = [x['name'] for x in api('tags').get('models', [])]
+        if not all(isinstance(name, str) for name in names):
+            raise ValueError('Invalid model list')
+        installed = set(names)
         connection = 'AVAILABLE'
     except Exception as exc:
         installed = set()
@@ -200,15 +203,17 @@ def run(paths, assignments=None, output=None, api=local_api):
                         'options': {'temperature': 0, 'num_predict': NUM_PREDICT, 'num_ctx': num_ctx},
                         'messages': [{'role': 'system', 'content': system},
                                      {'role': 'user', 'content': content}]})
-                    report['prompt_eval_count'] = raw.get('prompt_eval_count')
-                    report['done_reason'] = raw.get('done_reason')
-                    report['eval_count'] = raw.get('eval_count')
+                    # Provider stats are untrusted: persist only well-typed, bounded values.
+                    for key in ('prompt_eval_count', 'eval_count'):
+                        report[key] = raw.get(key) if _is_int(raw.get(key)) else None
+                    done = raw.get('done_reason')
+                    report['done_reason'] = scrub(done)[:40] if isinstance(done, str) else None
                     received = raw['message']['content']
                     check_response(raw, num_ctx)
                     result = json.loads(received)
-                    findings = result['findings']
+                    findings = result.get('findings') if isinstance(result, dict) else None
                     if not isinstance(findings, list) or len(findings) > 100:
-                        raise ValueError('Invalid findings')
+                        raise ValueError('Invalid finding schema: findings')
                     clean, dropped = sanitize_findings(findings)
                     report.update(status='COMPLETED', reason='Actual model response received; findings unverified',
                                   findings=clean, dropped_finding_keys=dropped)

@@ -270,6 +270,47 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(m.scrub('password = "hunter2"'), 'password = [REDACTED]')
         self.assertEqual(m.scrub('https://user:pw123@host/x'), 'https://[REDACTED]@host/x')
 
+    def test_scrub_secret_and_private_key_names(self):
+        for text in ('SECRET_KEY = "django-insecure-abc"', 'private_key: django-insecure-abc', '{"secret-key": "django-insecure-abc"}'):
+            with self.subTest(text):
+                self.assertNotIn('django-insecure-abc', m.scrub(text))
+
+    def test_untrusted_provider_stats_not_persisted(self):
+        base=fake_api()
+        def api(route, payload=None):
+            result=base(route, payload)
+            if route=='chat':
+                result.update(done_reason={'password':'hunter2'}, eval_count='hunter3', prompt_eval_count=['hunter4'])
+            return result
+        report,files=self.run_one(api)
+        self.assertEqual(report['status'], 'FAILED')
+        self.assertEqual((report['done_reason'], report['eval_count'], report['prompt_eval_count']), (None, None, None))
+        for text in files.values():
+            for leak in ('hunter2', 'hunter3', 'hunter4'):
+                self.assertNotIn(leak, text)
+        report,_=self.run_one(fake_api(done_reason='api_key=abcdef123456 '+'x'*5000))
+        self.assertNotIn('abcdef123456', report['done_reason'])
+        self.assertLessEqual(len(report['done_reason']), 40)
+
+    def test_findings_container_errors_named(self):
+        for content in ('{"findings":"x"}', '{}', '[]', json.dumps({'findings':[finding()]*101})):
+            with self.subTest(content[:20]):
+                report,_=self.run_one(fake_api(content=content))
+                self.assertEqual(report['status'], 'FAILED')
+                self.assertEqual(report['reason'], 'ValueError: Invalid finding schema: findings')
+
+    def test_non_string_model_names_fail_closed(self):
+        calls=[]
+        def api(route, payload=None):
+            calls.append(route)
+            return {'models':[{'name':1}, {'name':'local:1'}]}
+        with tempfile.TemporaryDirectory() as d:
+            _, result=m.run(['axis_sqlite.py'], {'Reviewer':'local:1'}, Path(d), api)
+        self.assertEqual(calls, ['tags'])
+        self.assertEqual(result['ollama'], 'UNAVAILABLE:ValueError')
+        self.assertEqual(result['installed_models'], [])
+        self.assertEqual(result['reports'][1]['status'], 'NOT_RUN')
+
     def test_scrub_no_backtracking(self):
         import time
         start=time.time()

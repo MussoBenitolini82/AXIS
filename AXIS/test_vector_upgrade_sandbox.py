@@ -1,4 +1,4 @@
-import tempfile, unittest
+import shutil, sys, tempfile, unittest
 from pathlib import Path
 from unittest import mock
 
@@ -129,6 +129,54 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                 run.assert_not_called()
                 self.assertEqual(result, {'passed': False, 'report': 'FAIL: güvensiz bağlama yolu'})
                 self.assertEqual(vu.detail(uid)['report'], 'FAIL: güvensiz bağlama yolu')
+
+    def test_non_utf8_locale_output_is_recorded(self):
+        # Real child process emits bytes that neither UTF-8 nor cp125x can decode strictly.
+        uid = self._propose()
+        real_run = vu.subprocess.run
+
+        def child(cmd, **kwargs):
+            code = 'import sys; sys.stdout.buffer.write(b"\\xc4\\x9e \\x81\\xff")'
+            return real_run([sys.executable, '-I', '-c', code], **kwargs)
+
+        with mock.patch.object(vu, 'docker_available', return_value=True), \
+             mock.patch.object(vu.subprocess, 'run', side_effect=child):
+            result = vu.verify(uid)
+        self.assertTrue(result['passed'])
+        self.assertIn('Ğ', result['report'])
+        self.assertEqual(vu.detail(uid)['report'], result['report'])
+
+    def test_docker_oserror_is_recorded(self):
+        uid = self._propose()
+        with mock.patch.object(vu, 'docker_available', return_value=True), \
+             mock.patch.object(vu.subprocess, 'run', side_effect=FileNotFoundError('docker')):
+            result = vu.verify(uid)
+        self.assertEqual(result, {'passed': False, 'report': 'FAIL: Docker çalıştırılamadı: FileNotFoundError'})
+        self.assertEqual(vu.detail(uid)['report'], result['report'])
+
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows file locking')
+    def test_locked_work_dir_keeps_result(self):
+        uid = self._propose()
+        held, dirs = [], []
+
+        def hold_file(cmd, **kwargs):
+            mount = cmd[cmd.index('--mount') + 1]
+            work = Path(mount.split('src=', 1)[1].split(',dst=', 1)[0])
+            dirs.append(work)
+            held.append(open(work / 'skills_helpers.py', 'rb'))
+            return mock.Mock(returncode=0, stdout='ok', stderr='')
+
+        try:
+            with mock.patch.object(vu, 'docker_available', return_value=True), \
+                 mock.patch.object(vu.subprocess, 'run', side_effect=hold_file):
+                result = vu.verify(uid)
+        finally:
+            for handle in held:
+                handle.close()
+            for work in dirs:
+                shutil.rmtree(work, ignore_errors=True)
+        self.assertTrue(result['passed'])
+        self.assertTrue(vu.detail(uid)['report'].startswith('PASS'))
 
 
 if __name__ == '__main__':

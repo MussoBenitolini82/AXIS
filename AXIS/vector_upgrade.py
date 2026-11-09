@@ -127,7 +127,8 @@ def verify(uid):
    return {'passed':False,'report':report}
   staged=DATA/(uid+'.py');code=staged.read_text(encoding='utf-8')
   if hashlib.sha256(code.encode()).hexdigest()!=r['digest']:raise ValueError('Kod değişmiş')
-  with tempfile.TemporaryDirectory(prefix='vector_test_') as tmp:
+  # Windows: a lingering handle (AV scan, Docker file share) must not discard the recorded result.
+  with tempfile.TemporaryDirectory(prefix='vector_test_',ignore_cleanup_errors=True) as tmp:
    p=Path(tmp);src=str(p.resolve())
    # Docker parses --mount as CSV key=value pairs; refuse paths that could add mount options.
    if any(ch in ',=' or ord(ch)<32 or 127<=ord(ch)<160 for ch in src):
@@ -145,7 +146,8 @@ def verify(uid):
    name=''.join(ch if ch.isalnum() and ch.isascii() or ch in '_.-' else '_' for ch in f'axis-verify-{uid[:12]}-{uuid.uuid4().hex[:8]}')
    cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={src},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
    try:
-    proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
+    # Container output is UTF-8; the Windows locale codec (e.g. cp1254) must not crash decoding.
+    proc=subprocess.run(cmd,capture_output=True,encoding='utf-8',errors='replace',timeout=35)
     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]
     passed=proc.returncode==0
    except subprocess.TimeoutExpired:
@@ -155,6 +157,7 @@ def verify(uid):
      report+='; konteyner kaldırıldı' if cleanup.returncode==0 else '; konteyner kaldırılamadı'
     except (OSError,subprocess.TimeoutExpired):
      report+='; konteyner kaldırılamadı'
+   except OSError as exc:passed=False;report='FAIL: Docker çalıştırılamadı: '+type(exc).__name__
   with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
   return {'passed':passed,'report':report}
 def decide(uid,action,confirmation=''):
