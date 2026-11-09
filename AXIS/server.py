@@ -1,3 +1,4 @@
+import axis_v13
 import axis_learning
 import axis_executor
 import central_brain as brain
@@ -111,6 +112,11 @@ def status():
 class Handler(BaseHTTPRequestHandler):
     def send(self,code,payload,ctype='application/json'):
         body=(json.dumps(payload,ensure_ascii=False).encode() if ctype=='application/json' else payload)
+        if getattr(self,'_axis_post',False):
+            try:
+                axis_learning.record(self._axis_task,'orchestrator','api_request',self.path.split('?')[0][:120], 'success' if code < 400 else 'failure',{'http_status':code})
+            except Exception:
+                pass
         self.send_response(code);self.send_header('Content-Type',ctype+'; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
     def do_GET(self):
         p=urllib.parse.urlsplit(self.path)
@@ -131,6 +137,7 @@ class Handler(BaseHTTPRequestHandler):
         if p.path=='/api/brain-skills': return self.send(200,brain.skills())
         if p.path=='/api/brain-discover': return self.send(200,brain.discover())
         if p.path=='/api/brain-graph': return self.send(200,brain.graph())
+        if p.path=='/api/axis-v13-dashboard': return self.send(200,axis_v13.dashboard())
         if p.path=='/api/axis-events': return self.send(200,axis_learning.events())
         if p.path=='/api/axis-lessons': return self.send(200,axis_learning.lessons())
         if p.path=='/api/axis-runs': return self.send(200,axis_executor.history())
@@ -139,17 +146,22 @@ class Handler(BaseHTTPRequestHandler):
         if p.path=='/api/sources': return self.send(200,sources(urllib.parse.parse_qs(p.query).get('node',[''])[0]))
         self.send(404,{'error':'Not found'})
     def do_POST(self):
+        self._axis_post=True
+        self._axis_task=__import__('uuid').uuid4().hex
         # Reject browser cross-origin writes to the local management API.
         origin=self.headers.get('Origin','')
         if origin and origin not in ('http://127.0.0.1:8765','http://localhost:8765'):
             return self.send(403,{'error':'Cross-origin istek reddedildi'})
         if self.headers.get('Sec-Fetch-Site','')=='cross-site':
             return self.send(403,{'error':'Cross-site istek reddedildi'})
-        if self.path not in ('/api/research','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover'): return self.send(404,{'error':'Not found'})
+        if self.path not in ('/api/research','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models'): return self.send(404,{'error':'Not found'})
         try:
             length=int(self.headers.get('Content-Length','0'))
             if length>11500000: raise ValueError('İstek çok büyük')
             data=json.loads(self.rfile.read(length))
+            if self.path=='/api/axis-v13-develop': return self.send(201,axis_v13.development(str(data.get('request','')),str(data.get('target','research_extensions.py'))))
+            if self.path=='/api/axis-v13-repair': return self.send(201,axis_v13.repair(str(data.get('error','')),str(data.get('target','research_extensions.py'))))
+            if self.path=='/api/axis-v13-models': return self.send(200,axis_v13.model_suggestions(str(data.get('request',''))))
             if self.path=='/api/axis-record': return self.send(201,{'id':axis_learning.record(str(data.get('task_id','')),str(data.get('agent','')),str(data.get('kind','')),str(data.get('tool','')),str(data.get('outcome','')),data.get('payload',{}))})
             if self.path=='/api/axis-learn': return self.send(200,axis_learning.learn())
             if self.path=='/api/axis-compose': return self.send(201,axis_learning.compose(str(data.get('name','')),data.get('skill_ids',[])))

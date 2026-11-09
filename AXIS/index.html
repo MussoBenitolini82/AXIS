@@ -38,7 +38,28 @@ async function v5request(path,payload){let r=await fetch(path,{method:'POST',hea
 function v5show(x){document.getElementById('v5out').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
 async function v5propose(){try{let x=await v5request('/api/upgrade-propose',{target:document.getElementById('v5target').value,code:document.getElementById('v5code').value,description:document.getElementById('v5desc').value});v5show(x);v5list()}catch(e){v5show(e.message)}}
 async function v5list(){try{let items=await(await fetch('/api/upgrades')).json(),root=document.getElementById('v5items');root.replaceChildren();for(let item of items){let div=document.createElement('div');div.style='border-top:1px solid #35445a;padding:10px';let h=document.createElement('p');h.textContent=item.target+' — '+item.status+' — '+item.description;div.append(h);for(let [label,fn] of [['Farkı incele',async()=>{let x=await(await fetch('/api/upgrade-detail?id='+encodeURIComponent(item.id))).json();v5show(x)}],['Docker testi',async()=>v5show(await v5request('/api/upgrade-test',{id:item.id}))],['Onayla',async()=>{if(!confirm('Kod farkını ve testleri inceledin mi? Değişiklik uygulanacak.'))return;v5show(await v5request('/api/upgrade-decision',{id:item.id,action:'approve',confirmation:'ONAYLIYORUM'}));v5list()}],['Reddet',async()=>{v5show(await v5request('/api/upgrade-decision',{id:item.id,action:'reject'}));v5list()}],['Geri al',async()=>{if(!confirm('Bu güncellemeyi geri almak istiyor musun?'))return;v5show(await v5request('/api/upgrade-rollback',{id:item.id,confirmation:'GERI_AL'}));v5list()}]]){if(label==='Geri al'&&item.status!=='applied'||label!=='Geri al'&&label!=='Farkı incele'&&item.status!=='pending')continue;let b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{await fn()}catch(e){v5show(e.message)}};div.append(b)}root.append(div)}}catch(e){v5show(e.message)}}v5list();
-</script></body></html>
+</script>
+<section id="axis-v13" style="padding:16px;border:1px solid #64748b;border-radius:12px;margin:16px 0">
+<h2>AXIS V13 · Canlı Öğrenme Grafiği</h2>
+<p>Ajanlar, görevler ve dersler. Güncelle: 10 saniye.</p>
+<pre id="axis-v13-summary" style="white-space:pre-wrap">Yükleniyor...</pre>
+<svg id="axis-v13-graph" viewBox="0 0 700 290" style="width:100%;max-height:300px;background:#101827;border-radius:10px" aria-label="AXIS learning network"></svg>
+</section>
+<script>
+(function(){
+const svg=document.getElementById('axis-v13-graph'),summary=document.getElementById('axis-v13-summary');
+async function update(){try{
+const r=await fetch('/api/axis-v13-dashboard');if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
+summary.textContent='Olay: '+d.events.length+' | Ders: '+d.lessons.length+' | Düğüm: '+d.nodes.length;
+svg.replaceChildren();const ns='http://www.w3.org/2000/svg',nodes=d.nodes.slice(0,50),coords={};
+nodes.forEach((n,i)=>{const a=2*Math.PI*i/Math.max(nodes.length,1);coords[n.id]=[350+250*Math.cos(a),145+110*Math.sin(a)];});
+d.edges.slice(0,100).forEach(e=>{if(!coords[e.source]||!coords[e.target])return;const l=document.createElementNS(ns,'line');l.setAttribute('x1',coords[e.source][0]);l.setAttribute('y1',coords[e.source][1]);l.setAttribute('x2',coords[e.target][0]);l.setAttribute('y2',coords[e.target][1]);l.setAttribute('stroke','#475569');svg.appendChild(l);});
+nodes.forEach(n=>{const c=document.createElementNS(ns,'circle');c.setAttribute('cx',coords[n.id][0]);c.setAttribute('cy',coords[n.id][1]);c.setAttribute('r',n.kind==='agent'?9:5);c.setAttribute('fill',n.kind==='agent'?'#38bdf8':n.kind==='lesson'?'#f59e0b':'#a78bfa');const t=document.createElementNS(ns,'title');t.textContent=n.kind+': '+n.label;c.appendChild(t);svg.appendChild(c);});
+}catch(e){summary.textContent='Öğrenme paneli: '+e.message;}}
+update();setInterval(update,10000);
+})();
+</script>
+</body></html>
 
 <section style="padding:18px;background:#111d31;border:1px solid #35506a;margin:12px;border-radius:14px;color:#e9f5ff">
 <h2>AXIS V7 · Çok Ajanlı Geliştirme</h2>
