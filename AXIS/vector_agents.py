@@ -1,5 +1,5 @@
 """Reviewable multi-role coding pipeline. Ollama roles are prompts, not independent models."""
-from axis_sqlite import ClosingConnection
+from axis_sqlite import open_db
 import ast, difflib, hashlib, json, os, re, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,12 +10,12 @@ DB=ROOT/'agents.sqlite3'
 LOCK=threading.RLock()
 MAX_CHARS=24000
 
-def dbconn():
-    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=20)
-    db.row_factory=sqlite3.Row
+def _setup(db):
     db.execute('CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, target TEXT, request TEXT, status TEXT, plan TEXT, review TEXT, proposal_id TEXT, created TEXT)')
     db.commit()
-    return db
+
+def dbconn():
+    return open_db(DB,_setup,timeout=20)
 
 def llm(system,user):
     import vector_intelligence as vi

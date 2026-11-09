@@ -1,4 +1,5 @@
-from axis_sqlite import ClosingConnection
+from axis_sqlite import open_db
+import local_models
 import axis_v13
 import axis_learning
 import axis_executor
@@ -20,9 +21,7 @@ DB=Path(os.getenv('VECTOR_DB',str(ROOT/'vector.db')))
 LOCK=threading.RLock()
 POOL=ThreadPoolExecutor(max_workers=3)
 
-def connect():
-    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=20)
-    db.row_factory=sqlite3.Row
+def _setup(db):
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,label TEXT NOT NULL,kind TEXT NOT NULL,description TEXT DEFAULT "",created TEXT NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS edges(source TEXT NOT NULL,target TEXT NOT NULL,relation TEXT NOT NULL,PRIMARY KEY(source,target,relation))')
@@ -30,7 +29,9 @@ def connect():
     db.execute('CREATE TABLE IF NOT EXISTS evidence(node_id TEXT,source_id TEXT,quote TEXT,PRIMARY KEY(node_id,source_id))')
     db.execute('CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,topic TEXT,status TEXT,details TEXT,created TEXT)')
     db.commit()
-    return db
+
+def connect():
+    return open_db(DB,_setup,timeout=20)
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def node_id(kind,label): return kind+':'+re.sub(r'[^\w-]+','-',label.casefold()).strip('-')[:100]
@@ -122,10 +123,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p=urllib.parse.urlsplit(self.path)
         if p.path=='/': return self.send(200,(ROOT/'index.html').read_bytes(),'text/html')
-        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':__import__('os').getenv('VECTOR_MODEL','qwen3:8b'),'features':['literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
+        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'features':['literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
         if p.path=='/api/neural':
-            q=urllib.parse.parse_qs(p.query)
-            return self.send(200,neural_view.model_graph([float(q.get('a',['1'])[0]),float(q.get('b',['0'])[0])]))
+            # http_response validates a/b and returns (400, error) instead of raising on bad input.
+            return self.send(*neural_view.http_response(urllib.parse.parse_qs(p.query)))
         if p.path=='/api/agent-catalog': return self.send(200,discovery.listing())
         if p.path=='/api/agent-health': return self.send(200,discovery.health())
         if p.path=='/api/agents': return self.send(200,vector_agents.listing())

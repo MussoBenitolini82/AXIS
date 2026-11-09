@@ -16,7 +16,7 @@ ROLES = {
     'Test Engineer': 'Propose behavioral tests, negative cases and missing coverage. Do not execute code.',
     'Coordinator': 'Aggregate actual statuses and unresolved findings. Never infer approval from agreement.',
 }
-_KEYS = r'(?:password|passwd|secret(?:[_-]?key)?|private[_-]?key|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
+_KEYS = r'(?:password|passwd|pwd|secret(?:[_-]?key)?|private[_-]?key|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
 # Each entry is (compiled pattern, replacement). All are linear: no nested quantifiers.
 SECRET_PATTERNS = [
     (re.compile(r'-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----.*?(?:-----END [A-Z ]{0,40}PRIVATE KEY-----|\Z)', re.S), '[REDACTED]'),
@@ -28,7 +28,12 @@ SECRET_PATTERNS = [
     (re.compile(r'xox[abprs]-[A-Za-z0-9-]{10,}'), '[REDACTED]'),
     (re.compile(r'sk-[A-Za-z0-9_-]{12,}'), '[REDACTED]'),
     (re.compile(r'AIza[0-9A-Za-z_-]{20,}'), '[REDACTED]'),
-    (re.compile(r'(?i)(["\']?' + _KEYS + r'["\']?\s*[=:]\s*)(?:"[^"\n]*"|\'[^\'\n]*\'|["\']?[^\s"\',;}]+)'), r'\1[REDACTED]'),
+    # Authorization: Basic <b64> (quoted value consumed whole so no quote dangles).
+    (re.compile(r'(?i)(\bauthorization["\']?\s*[=:]\s*)(?:"basic\s[^"\n]*"|\'basic\s[^\'\n]*\'|basic\s+[A-Za-z0-9+/=._~-]+)'), r'\1Basic [REDACTED]'),
+    # Cookie / Set-Cookie: the whole header value (every name=value pair) is secret.
+    (re.compile(r'(?i)(\b(?:set-)?cookie["\']?\s*[=:]\s*)(?:"[^"\n]*"|\'[^\'\n]*\'|[^\s"\'][^\r\n]*)'), r'\1[REDACTED]'),
+    # \]? also covers subscripts such as os.environ["TOKEN"] = "x".
+    (re.compile(r'(?i)(["\']?' + _KEYS + r'["\']?\]?\s*[=:]\s*)(?:"[^"\n]*"|\'[^\'\n]*\'|["\']?[^\s"\',;}]+)'), r'\1[REDACTED]'),
 ]
 ROOT = Path(__file__).resolve().parent
 NUM_PREDICT = 4096
@@ -241,12 +246,23 @@ def run(paths, assignments=None, output=None, api=local_api):
     (directory / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     return directory, summary
 
-if __name__ == '__main__':
+MAX_TIMEOUT = 7200
+
+def _timeout(value):
+    seconds = int(value)
+    if not 0 < seconds <= MAX_TIMEOUT:
+        raise argparse.ArgumentTypeError('timeout must be 1..%d seconds' % MAX_TIMEOUT)
+    return seconds
+
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('files', nargs='+')
     parser.add_argument('--model', help='Explicit installed local Ollama model; same model across roles is not independent review')
-    parser.add_argument('--timeout', type=int, default=CHAT_TIMEOUT, help='Seconds per model call (default %(default)s)')
-    args = parser.parse_args()
+    parser.add_argument('--timeout', type=_timeout, default=CHAT_TIMEOUT, help='Seconds per model call, 1..%d (default %%(default)s)' % MAX_TIMEOUT)
+    return parser
+
+if __name__ == '__main__':
+    args = build_parser().parse_args()
     CHAT_TIMEOUT = args.timeout
     mapping = {role: args.model for role in ROLES if role != 'Coordinator' and args.model}
     directory, _ = run(args.files, mapping)

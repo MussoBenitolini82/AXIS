@@ -1,0 +1,56 @@
+diff --git a/AXIS/multi_ai_review.py b/AXIS/multi_ai_review.py
+index 393496a..ff6d367 100644
+--- a/AXIS/multi_ai_review.py
++++ b/AXIS/multi_ai_review.py
+@@ -3,6 +3,7 @@ import argparse
+ import hashlib
+ import json
+ import re
++import stat
+ import urllib.request
+ import uuid
+ from datetime import datetime, timezone
+@@ -15,10 +16,25 @@ ROLES = {
+     'Test Engineer': 'Propose behavioral tests, negative cases and missing coverage. Do not execute code.',
+     'Coordinator': 'Aggregate actual statuses and unresolved findings. Never infer approval from agreement.',
+ }
+-SECRET = re.compile(r'(?i)(?:api[_-]?key|password|secret|token)\s*[=:]\s*[\"\x27]?[^\s\"\x27,;]+|(?:sk-|AIza|ghp_)[A-Za-z0-9_-]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY-----')
++_KEYS = r'(?:password|passwd|secret(?:[_-]?key)?|private[_-]?key|token|api[_-]?key|access[_-]?key|client[_-]?secret)'
++# Each entry is (compiled pattern, replacement). All are linear: no nested quantifiers.
++SECRET_PATTERNS = [
++    (re.compile(r'-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----.*?(?:-----END [A-Z ]{0,40}PRIVATE KEY-----|\Z)', re.S), '[REDACTED]'),
++    (re.compile(r'([A-Za-z][A-Za-z0-9+.-]{0,30}://)[^\s/@:]+:[^\s/@]+@'), r'\1[REDACTED]@'),
++    (re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}'), 'Bearer [REDACTED]'),
++    (re.compile(r'\bAKIA[0-9A-Z]{16}\b'), '[REDACTED]'),
++    (re.compile(r'github_pat_[A-Za-z0-9_]{20,}'), '[REDACTED]'),
++    (re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'), '[REDACTED]'),
++    (re.compile(r'xox[abprs]-[A-Za-z0-9-]{10,}'), '[REDACTED]'),
++    (re.compile(r'sk-[A-Za-z0-9_-]{12,}'), '[REDACTED]'),
++    (re.compile(r'AIza[0-9A-Za-z_-]{20,}'), '[REDACTED]'),
++    (re.compile(r'(?i)(["\']?' + _KEYS + r'["\']?\s*[=:]\s*)(?:"[^"\n]*"|\'[^\'\n]*\'|["\']?[^\s"\',;}]+)'), r'\1[REDACTED]'),
++]
+ ROOT = Path(__file__).resolve().parent
+ NUM_PREDICT = 4096
+ CHAT_TIMEOUT = 600  # seconds; CPU-only machines need minutes for large bundles
++META_TIMEOUT = 15  # seconds; /api/tags and /api/show are metadata-only
++CLOUD_FORBIDDEN = 'Cloud-backed models forbidden'
+ # Conservative chars-per-token estimate (measured ~3.9 for AXIS code). Under-estimating
+ # chars/token over-sizes num_ctx, which is safe; over-estimating would truncate input.
+ CHARS_PER_TOKEN = 2.5
+@@ -30,9 +46,15 @@ class ContextTruncated(ValueError):
+ class OutputTruncated(ValueError):
+     """The model hit its output token limit; the response is incomplete."""
+ 
++class ResponseUnverifiable(ValueError):
++    """Provider metadata is missing or invalid, so completeness cannot be verified."""
++
++SEVERITIES = {'critical', 'high', 'medium', 'low', 'info'}
++FINDING_KEYS = ('severity', 'file', 'line', 'confidence', 'explanation', 'suggested_fix')
++
+ def context_limit(metadata):
+     limits = [v for k, v in (metadata.get('model_info') or {}).items()
+-              if k.endswith('.context_length') and isinstance(v, int) and v > 0]
++              if k.endswith('.context_length') and _is_int(v) and v > 0]
+     if not limits:
+         raise ContextTruncated('Model context length unknown')
+     return min(limits)

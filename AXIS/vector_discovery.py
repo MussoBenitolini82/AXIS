@@ -1,7 +1,8 @@
 """V9: capability audit, explicit agent proposals, parallel read-only agent tasks.
 No remote code/model installation and no arbitrary tool execution.
 """
-from axis_sqlite import ClosingConnection
+from axis_sqlite import open_db
+import local_models
 import json, os, sqlite3, threading, uuid, urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
@@ -15,7 +16,7 @@ BUILTINS={
  'coding':('Kod geliştirme ajanı','Python modülü önerisi ve test planı'),
  'review':('Kod inceleme ajanı','Kod riskleri ve kalite incelemesi'),
  'testing':('Test tasarım ajanı','Davranış testi örnekleri'),
- 'neural':('Sinir ağı analisti','PyTorch örnek ağını inceleme'),
+ 'neural':('Sinir ağı analisti','Saf Python XOR sinir ağını inceleme'),
 }
 KEYWORDS={
  'literature':('araştır','literatür','makale','kaynak','research','paper'),
@@ -33,11 +34,11 @@ CANDIDATES={
  'audio':('Ses işleme uzmanı','Konuşma tanıma ve ses üretme','Ses modeli ve mikrofon izni gerekir'),
  'browser':('Tarayıcı otomasyon uzmanı','Web arayüzü üzerinde kontrollü işlem','Tarayıcı aracı ve her yazma işlemi için kullanıcı onayı gerekir'),
 }
-def conn():
- db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15);db.row_factory=sqlite3.Row
+def _setup(db):
  db.execute('CREATE TABLE IF NOT EXISTS agents(id TEXT PRIMARY KEY,capability TEXT UNIQUE,name TEXT,description TEXT,requirements TEXT,status TEXT,created TEXT)')
  db.execute('CREATE TABLE IF NOT EXISTS scans(id TEXT PRIMARY KEY,request TEXT,report TEXT,created TEXT)')
- db.commit();return db
+ db.commit()
+def conn():return open_db(DB,_setup,timeout=15)
 def now():return datetime.now(timezone.utc).isoformat()
 def installed():
  with conn() as db: return [dict(r) for r in db.execute("SELECT * FROM agents WHERE status='approved'")]
@@ -78,11 +79,13 @@ def decision(aid,action,confirmation=''):
 def health():
  import importlib.util
  def module(name):return importlib.util.find_spec(name) is not None
- ollama=False
+ ollama=False;cloud=[]
  try:
-  with urllib.request.urlopen('http://127.0.0.1:11434/api/tags',timeout=1.5) as r:ollama=r.status==200
+  with urllib.request.urlopen(local_models.api_url('tags'),timeout=1.5) as r:
+   ollama=r.status==200
+   cloud=[m.get('name') for m in json.load(r).get('models',[]) if isinstance(m,dict) and (local_models.is_cloud_name(m.get('name')) or local_models.is_remote(m))]
  except Exception:pass
- return {'ollama_reachable':ollama,'torch_installed':module('torch'),'pypdf_installed':module('pypdf'),'docker_check':'Docker kontrolü yalnızca güncelleme testi sırasında yapılır','builtin_agents':list(BUILTINS),'approved_agents':[a['capability'] for a in installed()]}
+ return {'ollama_reachable':ollama,'cloud_models_refused':cloud,'torch_installed':module('torch'),'pypdf_installed':module('pypdf'),'docker_check':'Docker kontrolü yalnızca güncelleme testi sırasında yapılır','builtin_agents':list(BUILTINS),'approved_agents':[a['capability'] for a in installed()]}
 def parallel_readonly(request):
  """Run only the existing safe read-only tools concurrently, never untrusted generated code."""
  result=scan(request)

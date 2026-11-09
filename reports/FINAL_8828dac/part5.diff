@@ -1,0 +1,10 @@
+diff --git a/AXIS/test_vector_upgrade_sandbox.py b/AXIS/test_vector_upgrade_sandbox.py
+index 57cfb98..29384fc 100644
+--- a/AXIS/test_vector_upgrade_sandbox.py
++++ b/AXIS/test_vector_upgrade_sandbox.py
+@@ -1,4 +1,4 @@
+-import tempfile, unittest
++import shutil, sys, tempfile, unittest
+ from pathlib import Path
+ from unittest import mock
+ 

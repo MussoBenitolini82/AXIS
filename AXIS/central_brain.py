@@ -1,7 +1,7 @@
 """V10 central experience log and evidence-gated reusable workflow learning.
 No LLM weights are updated. Proposed skills never execute arbitrary code.
 """
-from axis_sqlite import ClosingConnection
+from axis_sqlite import open_db
 import json, os, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,14 +12,13 @@ ROLES={'research','planner','coder','reviewer','tester','visual','orchestrator',
 TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_research','agent_scan','agent_run','graph','neural_view','pdf_ingest'}
 
 def now():return datetime.now(timezone.utc).isoformat()
-def conn():
-    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15)
-    db.row_factory=sqlite3.Row
+def _setup(db):
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS experiences(id TEXT PRIMARY KEY,task_id TEXT,agent TEXT,action TEXT,tool TEXT,status TEXT,summary TEXT,evidence TEXT,created TEXT)')
     db.execute('CREATE TABLE IF NOT EXISTS learned_skills(id TEXT PRIMARY KEY,name TEXT,steps TEXT,evidence_ids TEXT,status TEXT,created TEXT)')
     db.execute('CREATE TABLE IF NOT EXISTS relations(source TEXT,target TEXT,kind TEXT,PRIMARY KEY(source,target,kind))')
-    db.commit();return db
+    db.commit()
+def conn():return open_db(DB,_setup,timeout=15)
 
 def log(agent,action,tool,status,summary,task_id=None,evidence=None):
     if agent not in ROLES:raise ValueError('Geçersiz ajan')

@@ -3,11 +3,14 @@ import json, os, re, urllib.request, urllib.parse, concurrent.futures, hashlib
 from pathlib import Path
 import server
 import self_evolution
-MODEL=os.getenv('VECTOR_MODEL','qwen3:8b')
-OLLAMA=os.getenv('OLLAMA_URL','http://127.0.0.1:11434/api/chat')
+import local_models
+MODEL=os.getenv('VECTOR_MODEL',local_models.DEFAULT_MODEL)
+OLLAMA=os.getenv('OLLAMA_URL',local_models.BASE+'/api/chat')
 
 def ask(messages, temperature=0.2):
-    req=urllib.request.Request(OLLAMA, data=json.dumps({'model':MODEL,'stream':False,'messages':messages,'options':{'temperature':temperature}}).encode(),headers={'Content-Type':'application/json'},method='POST')
+    base=OLLAMA.rsplit('/api/',1)[0]
+    local_models.ensure_local(MODEL,base)  # refuses cloud-backed models before any chat request
+    req=urllib.request.Request(local_models.api_url('chat',base), data=json.dumps({'model':MODEL,'stream':False,'messages':messages,'options':{'temperature':temperature}}).encode(),headers={'Content-Type':'application/json'},method='POST')
     with urllib.request.urlopen(req,timeout=180) as r:
         result=json.load(r)
     return result['message']['content']

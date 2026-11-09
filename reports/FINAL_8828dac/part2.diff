@@ -1,0 +1,114 @@
+diff --git a/AXIS/multi_ai_review.py b/AXIS/multi_ai_review.py
+index 393496a..ff6d367 100644
+--- a/AXIS/multi_ai_review.py
++++ b/AXIS/multi_ai_review.py
+@@ -45,30 +67,77 @@ def plan_context(prompt_chars, limit):
+         raise ContextTruncated('Review bundle exceeds model context')
+     return num_ctx
+ 
+-def check_not_truncated(response, num_ctx):
++def _is_int(v):
++    return isinstance(v, int) and not isinstance(v, bool)
++
++def check_response(response, num_ctx):
++    """Fail closed: every completeness signal must be present, valid and healthy."""
++    prompt = response.get('prompt_eval_count')
++    count = response.get('eval_count')
++    done = response.get('done_reason')
++    if not _is_int(prompt) or prompt <= 0:
++        raise ResponseUnverifiable('prompt_eval_count missing or invalid')
++    if not _is_int(count) or count < 0:
++        raise ResponseUnverifiable('eval_count missing or invalid')
+     # Ollama silently keeps only the tail of a prompt longer than num_ctx; a prompt that
+     # filled the input budget is treated as truncated.
+-    count = response.get('prompt_eval_count')
+-    if isinstance(count, int) and count >= num_ctx - NUM_PREDICT:
++    if prompt >= num_ctx - NUM_PREDICT:
+         raise ContextTruncated('Prompt filled the context window')
+-
+-def check_output_complete(response):
+-    done = response.get('done_reason')
+-    count = response.get('eval_count')
+-    if done == 'length' or (isinstance(count, int) and count >= NUM_PREDICT):
++    if done == 'length' or count >= NUM_PREDICT:
+         raise OutputTruncated('Model output reached the token limit')
++    if done != 'stop':
++        raise ResponseUnverifiable('done_reason missing or not stop')
+ 
+ def scrub(text):
+-    return SECRET.sub('[REDACTED]', text)
++    for pattern, replacement in SECRET_PATTERNS:
++        text = pattern.sub(replacement, text)
++    return text
++
++def _text(value, field, limit):
++    if not isinstance(value, str) or len(value) > limit:
++        raise ValueError('Invalid finding schema: ' + field)
++    return scrub(value)
++
++def sanitize_findings(findings):
++    """Build fresh finding dicts from validated fields only; return (clean, dropped_key_count)."""
++    clean, dropped = [], 0
++    for finding in findings:
++        if not isinstance(finding, dict):
++            raise ValueError('Invalid finding schema: finding')
++        for field in ('severity', 'file', 'line', 'confidence', 'explanation'):
++            if field not in finding:
++                raise ValueError('Invalid finding schema: ' + field)
++        severity = finding['severity']
++        if not isinstance(severity, str) or severity.lower() not in SEVERITIES:
++            raise ValueError('Invalid finding schema: severity')
++        line = finding['line']
++        if line is not None and not _is_int(line):
++            raise ValueError('Invalid finding schema: line')
++        item = dict(severity=severity.lower(), file=_text(finding['file'], 'file', 300), line=line,
++                    confidence=_text(finding['confidence'], 'confidence', 50),
++                    explanation=_text(finding['explanation'], 'explanation', 4000))
++        if 'suggested_fix' in finding:
++            item['suggested_fix'] = _text(finding['suggested_fix'], 'suggested_fix', 4000)
++        dropped += sum(1 for k in finding if k not in FINDING_KEYS)
++        clean.append(item)
++    return clean, dropped
+ 
+ def bundle(paths, root=ROOT):
++    if not paths:
++        raise ValueError('No source files selected')
+     root = root.resolve()
+-    chunks = []
++    chunks, seen = [], set()
+     for name in paths:
+         path = (root / name).resolve()
+         if not path.is_relative_to(root) or path.suffix != '.py' or path.parent != root:
+             raise ValueError('Only explicitly selected top-level AXIS Python source files allowed')
+-        if path.stat().st_size > 60000:
++        if path in seen:
++            raise ValueError('Duplicate source file')
++        seen.add(path)
++        info = path.stat()
++        if not stat.S_ISREG(info.st_mode):
++            raise ValueError('Only regular source files allowed')
++        if info.st_size > 60000:
+             raise ValueError('Source too large')
+         chunks.append(name + '\n' + path.read_text(encoding='utf-8'))
+     text = '\n\n'.join(chunks)
+@@ -86,7 +155,7 @@ def local_api(route, payload=None):
+     data = None if payload is None else json.dumps(payload).encode()
+     req = urllib.request.Request('http://127.0.0.1:11434/api/' + route,
+                                  data=data, headers={'Content-Type': 'application/json'})
+-    with opener.open(req, timeout=CHAT_TIMEOUT if payload else 5) as response:
++    with opener.open(req, timeout=CHAT_TIMEOUT if route == 'chat' else META_TIMEOUT) as response:
+         raw = response.read(1048577)
+     if len(raw) > 1048576:
+         raise ValueError('Provider response too large')
+@@ -102,7 +171,10 @@ def run(paths, assignments=None, output=None, api=local_api):
+     directory = (output or ROOT.parent / 'reports') / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:8])
+     directory.mkdir(parents=True, exist_ok=False)
+     try:
+-        installed = {x['name'] for x in api('tags').get('models', [])}
++        names = [x['name'] for x in api('tags').get('models', [])]
++        if not all(isinstance(name, str) for name in names):
++            raise ValueError('Invalid model list')
++        installed = set(names)
+         connection = 'AVAILABLE'
+     except Exception as exc:
+         installed = set()

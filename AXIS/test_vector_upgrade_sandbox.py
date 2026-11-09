@@ -1,4 +1,4 @@
-import shutil, sys, tempfile, unittest
+import contextlib, shutil, sys, tempfile, unittest
 from pathlib import Path
 from unittest import mock
 
@@ -16,7 +16,11 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
         data = Path(self.tmp.name)
         tests = data / 'behavior_specs'
         tests.mkdir()
-        for name, val in (('DATA', data), ('DB', data / 'upgrades.sqlite3'), ('TESTS', tests)):
+        root = data / 'root'
+        root.mkdir()
+        self.root = root
+        # ROOT too: decide()/rollback() must never write the real target files.
+        for name, val in (('DATA', data), ('DB', data / 'upgrades.sqlite3'), ('TESTS', tests), ('ROOT', root)):
             p = mock.patch.object(vu, name, val)
             p.start()
             self.addCleanup(p.stop)
@@ -177,6 +181,131 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                 shutil.rmtree(work, ignore_errors=True)
         self.assertTrue(result['passed'])
         self.assertTrue(vu.detail(uid)['report'].startswith('PASS'))
+
+    def _docker_passes(self, run=None):
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(vu, 'docker_available', return_value=True))
+        fake = mock.Mock(returncode=0, stdout='ok', stderr='')
+        stack.enter_context(mock.patch.object(vu.subprocess, 'run', side_effect=run, return_value=fake))
+        return stack
+
+    def _approve(self, code):
+        uid = vu.propose('skills_helpers.py', code, 'apply test')['id']
+        with self._docker_passes():
+            return uid, vu.decide(uid, 'approve', 'ONAYLIYORUM')
+
+    def _failing_update(self, prefix, on):
+        """Fail the status UPDATE either at execute time or at commit time (after the file step)."""
+        class Failing(vu.ClosingConnection):
+            hit = False
+
+            def execute(self, sql, *args):
+                if sql.startswith(prefix):
+                    if on == 'execute':
+                        raise vu.sqlite3.OperationalError('database is locked')
+                    self.hit = True
+                return super().execute(sql, *args)
+
+            def __exit__(self, exc_type, *args):
+                if self.hit and exc_type is None:
+                    self.rollback()
+                    self.close()
+                    raise vu.sqlite3.OperationalError('database is locked')
+                return super().__exit__(exc_type, *args)
+        return mock.patch.object(vu, 'ClosingConnection', Failing)
+
+    def test_multiline_proposal_bytes_match_digest(self):
+        code = 'def f():\n return 1\n\ndef g():\n return 2\n'
+        uid = vu.propose('skills_helpers.py', code, 'crlf')['id']
+        self.assertEqual((vu.DATA / (uid + '.py')).read_bytes(), code.encode())
+        seen = []
+
+        def capture(cmd, **kwargs):
+            mount = cmd[cmd.index('--mount') + 1]
+            work = Path(mount.split('src=', 1)[1].split(',dst=', 1)[0])
+            seen.append((work / 'skills_helpers.py').read_bytes())
+            return mock.Mock(returncode=0, stdout='ok', stderr='')
+
+        with self._docker_passes(capture):
+            result = vu.decide(uid, 'approve', 'ONAYLIYORUM')
+        self.assertEqual(result['status'], 'applied')
+        self.assertEqual(seen, [code.encode()])
+        self.assertEqual((self.root / 'skills_helpers.py').read_bytes(), code.encode())
+
+    def test_syntax_error_is_value_error(self):
+        with self.assertRaisesRegex(ValueError, r'^Sözdizimi hatası: line 1$'):
+            vu.propose('research_extensions.py', 'def f(:', 'bad')
+
+    def test_decide_db_failure_restores_target(self):
+        target = self.root / 'skills_helpers.py'
+        for original in (b'def old(): return 0\n', None):
+            for on in ('execute', 'commit'):
+                with self.subTest(original=original, on=on):
+                    target.unlink(missing_ok=True)
+                    if original is not None:
+                        target.write_bytes(original)
+                    uid = vu.propose('skills_helpers.py', 'def f(): return 1', 'apply')['id']
+                    with self._docker_passes(), self._failing_update('UPDATE upgrades SET status=?,backup=', on):
+                        with self.assertRaises(vu.sqlite3.OperationalError):
+                            vu.decide(uid, 'approve', 'ONAYLIYORUM')
+                    if original is None:
+                        self.assertFalse(target.exists())
+                    else:
+                        self.assertEqual(target.read_bytes(), original)
+                    row = vu.detail(uid)
+                    self.assertEqual((row['status'], row['backup']), ('pending', ''))
+                    self.assertEqual([p.name for p in self.root.iterdir() if p != target], [])
+
+    def test_rollback_db_failure_keeps_applied_file(self):
+        target = self.root / 'skills_helpers.py'
+        for original in (b'def old(): return 0\n', None):
+            for on in ('execute', 'commit'):
+                with self.subTest(original=original, on=on):
+                    target.unlink(missing_ok=True)
+                    if original is not None:
+                        target.write_bytes(original)
+                    uid, result = self._approve('def f(): return 1')
+                    self.assertEqual(result['status'], 'applied')
+                    with self._failing_update('UPDATE upgrades SET status=? WHERE', on), \
+                         mock.patch.object(vu.shutil, 'copy2', wraps=vu.shutil.copy2) as copy:
+                        with self.assertRaises(vu.sqlite3.OperationalError):
+                            vu.rollback(uid, 'GERI_AL')
+                    # Never copied straight onto the target (non-atomic).
+                    self.assertNotIn(target, [Path(c.args[1]) for c in copy.call_args_list])
+                    self.assertEqual(target.read_bytes(), b'def f(): return 1')
+                    self.assertEqual(vu.detail(uid)['status'], 'applied')
+                    self.assertEqual([p.name for p in self.root.iterdir() if p != target], [])
+                    self.assertEqual(vu.rollback(uid, 'GERI_AL')['status'], 'rolled_back')
+                    if original is None:
+                        self.assertFalse(target.exists())
+                    else:
+                        self.assertEqual(target.read_bytes(), original)
+
+    def test_connection_closed_when_setup_fails(self):
+        made = []
+
+        class Broken(vu.ClosingConnection):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                made.append((self, kwargs))
+
+            def commit(self):
+                raise vu.sqlite3.OperationalError('disk I/O error')
+
+        with mock.patch.object(vu, 'ClosingConnection', Broken):
+            with self.assertRaises(vu.sqlite3.OperationalError):
+                vu.connection()
+        self.assertEqual(len(made), 1)
+        self.assertEqual(made[0][1].get('timeout'), 15)
+        with self.assertRaises(vu.sqlite3.ProgrammingError):
+            made[0][0].execute('SELECT 1')
+
+    def test_docker_available_decodes_utf8(self):
+        with mock.patch.object(vu.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
+            self.assertTrue(vu.docker_available())
+        kwargs = run.call_args.kwargs
+        self.assertNotIn('text', kwargs)
+        self.assertEqual((kwargs.get('encoding'), kwargs.get('errors')), ('utf-8', 'replace'))
 
 
 if __name__ == '__main__':

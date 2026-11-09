@@ -4,7 +4,8 @@ import neural_view, vector_upgrade as up
 class V5Tests(unittest.TestCase):
  def test_real_weights(self):
   g=neural_view.model_graph()
-  if not g['available']:self.skipTest('PyTorch optional')
+  self.assertTrue(g['available'])
+  self.assertTrue(g['trained'])
   self.assertEqual(g['architecture'],[2,8,1])
   self.assertEqual(len(g['edges']),2*8+8*1)
   self.assertEqual(g['parameter_count'],2*8+8+8*1+1)

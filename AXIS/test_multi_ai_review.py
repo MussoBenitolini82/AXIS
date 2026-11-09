@@ -270,6 +270,37 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(m.scrub('password = "hunter2"'), 'password = [REDACTED]')
         self.assertEqual(m.scrub('https://user:pw123@host/x'), 'https://[REDACTED]@host/x')
 
+    def test_scrub_env_basic_cookie_pwd(self):
+        cases=[('os.environ["TOKEN"]="tokenv123"','tokenv123'), ("os.environ['API_KEY'] = 'apienv456'",'apienv456'),
+               ('Authorization: Basic dXNlcjpwYXNzd29yZA==','dXNlcjpwYXNzd29yZA'),
+               ('{"Authorization": "Basic dXNlcjpwYXNzd29yZA=="}','dXNlcjpwYXNzd29yZA'),
+               ('Cookie: session=sess789; other=oth012','sess789'), ('Cookie: session=sess789; other=oth012','oth012'),
+               ('Set-Cookie: sid=sid345; Path=/; HttpOnly','sid345'), ('{"Cookie": "sid=sid345"}','sid345'),
+               ('pwd=pw678','pw678'), ('PWD: pw678','pw678')]
+        for text, secret in cases:
+            with self.subTest(text):
+                out=m.scrub(text)
+                self.assertNotIn(secret, out)
+                self.assertIn('[REDACTED]', out)
+                self.assertNotIn('[REDACTED]"', out)
+                self.assertNotIn("[REDACTED]'", out)
+        self.assertEqual(m.scrub('os.environ["TOKEN"]="tokenv123"'), 'os.environ["TOKEN"]=[REDACTED]')
+        self.assertEqual(m.scrub('Authorization: Basic dXNlcjpwYXNzd29yZA=='), 'Authorization: Basic [REDACTED]')
+        for prose in ('the token count is 5', 'password policy', 'Basic authentication is weak', 'the Set-Cookie header',
+                      'cookie policy applies', 'print the pwd output', 'Authorization required'):
+            with self.subTest(prose):
+                self.assertEqual(m.scrub(prose), prose)
+
+    def test_timeout_bounds(self):
+        import contextlib, io
+        parse=lambda *a: m.build_parser().parse_args(['axis_sqlite.py', *a])
+        self.assertEqual(parse().timeout, m.CHAT_TIMEOUT)
+        self.assertEqual(parse('--timeout', '1').timeout, 1)
+        self.assertEqual(parse('--timeout', '7200').timeout, 7200)
+        for bad in ('0', '-5', '7201', 'abc'):
+            with self.subTest(bad), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                parse('--timeout', bad)
+
     def test_scrub_secret_and_private_key_names(self):
         for text in ('SECRET_KEY = "django-insecure-abc"', 'private_key: django-insecure-abc', '{"secret-key": "django-insecure-abc"}'):
             with self.subTest(text):
@@ -316,4 +347,5 @@ class HardeningTests(unittest.TestCase):
         start=time.time()
         m.scrub('password' + '=' * 50000 + ' ' * 50000 + '"' * 50000 + '-----BEGIN PRIVATE KEY-----' * 2000)
         m.scrub('a' * 200000 + '://' + 'b:' * 50000)
+        m.scrub('Authorization: ' * 20000 + 'Basic ' * 20000 + 'Cookie:' * 20000 + 'os.environ["token"]' * 20000)
         self.assertLess(time.time()-start, 5)

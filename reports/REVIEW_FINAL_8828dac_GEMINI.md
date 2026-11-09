@@ -1,0 +1,59 @@
+# Gemini review of AXIS 5ee362b -> 8828dac (Python files only)
+
+Provider: Google Gemini via MCP ask_gemini. Courier record; no opinions added.
+
+Attempt log: step 1 (file read, model gemini-3.8-flash-high, parts 1, 2, 3, 7 sent in parallel) timed out for all four. The single fallback per part (inline, gemini-4-argon-medium) was then used for every part. Parts 4, 5, 6 went directly inline with gemini-4-argon-medium (step 1 was not attempted for them after the earlier timeouts). UTC time is the output of `date -u` taken right after each response.
+
+| Part | Method | Requested model | Self-reported reviewer | UTC time | sha256 | Status |
+|---|---|---|---|---|---|---|
+| 1 | inline (not byte-verified) after step-1 timeout | gemini-4-argon-medium | Gemini 4 Argon | 2026-11-09T22:46:14Z | 5bb6fa675c7378fd433ab0b65dc4443388027264c3807355c9ff5d0286a07a7a | COMPLETED |
+| 2 | inline (not byte-verified) after step-1 timeout | gemini-4-argon-medium | Gemini 4 Argon | 2026-11-09T22:46:56Z | 8ae09ed038db13cafa1dc84c3110639ee010d208842392c8a456ac5a50be40ee | COMPLETED |
+| 3 | inline (not byte-verified) after step-1 timeout | gemini-4-argon-medium | Gemini 4 Argon (Medium) | 2026-11-09T22:47:39Z | 5e05279c611063546ae87d067098a84d98fef11867cbe67033dc21856af0922b | COMPLETED |
+| 7 | step 1 timed out; inline fallback timed out | gemini-3.8-flash-high, then gemini-4-argon-medium | n/a | 2026-11-09T22:48:54Z | 81827c79a544004167813c97f5c1c5f40ea34c6a7c3820860ac19fcc401f11b3 | NOT RUN |
+| 4 | inline (not byte-verified) | gemini-4-argon-medium | Gemini 4 Argon | 2026-11-09T22:49:48Z | fe83c1265ee52fdadca09eb845428bc88930fc062d0decf81ce79efddd9ccfb7 | COMPLETED |
+| 5 | inline (not byte-verified) | gemini-4-argon-medium | Gemini | 2026-11-09T22:50:12Z | 318270f4a7ad44ba56fc9cd6d6af8b6a51783fdaa83763d3c6d4e9ea74ac4aa5 | COMPLETED |
+| 6 | inline (not byte-verified) | gemini-4-argon-medium | Gemini 4 Argon | 2026-11-09T22:51:13Z | 13fde6bf48923c7f0be26526d3cccfa1688486d03bcc2cf51ba9d6f6ecaaf823 | COMPLETED |
+
+All part sha256 values matched MANIFEST.txt before sending.
+
+Bulgular doğrulanmamıştır; kod ve testle bağımsız doğrulama gerekir.
+
+## Part 1
+
+```json
+{"reviewer":"Gemini 4 Argon","verdict":"approve_with_conditions","findings":[{"severity":"medium","file":"AXIS/multi_ai_review.py","line":23,"confidence":"high","explanation":"The URL credential pattern `([A-Za-z][A-Za-z0-9+.-]{0,30}://)[^\\s/@:]+:[^\\s/@]+@` requires a non-empty username before the colon, failing to redact credentials in git/HTTP URLs that use an empty username with a token (e.g., `https://:ghp_xxx@host` or `http://:secret@host`).","suggested_fix":"Change the username segment from `[^\\s/@:]+` to `[^\\s/@:]*` so empty-username auth URLs are also redacted."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":25,"confidence":"high","explanation":"The AWS access key pattern `\\bAKIA[0-9A-Z]{16}\\b` only matches long-term IAM access keys (`AKIA`) and misses temporary STS access key IDs prefixed with `ASIA`.","suggested_fix":"Use `\\bA[KS]IA[0-9A-Z]{16}\\b` to cover both long-term and temporary AWS access key IDs."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":31,"confidence":"medium","explanation":"In the generic key-value secret regex, `\"[^\"\\n]*\"` and `'[^'\\n]*'` stop at the first quote character even when escaped (e.g., `password=\"abc\\\"secret\"`), leaving the suffix after `\\\"` unredacted.","suggested_fix":"Allow escaped characters inside quoted secret values or match greedily up to the closing quote on the line without catastrophic backtracking."}],"not_reviewed":["Parts 2 through 7 of the diff (including `_is_int` definition, truncation/metadata checks, findings allowlist reconstruction, bundle validation, `vector_upgrade.verify()`, and unit tests) were not included in this hunk."]}
+```
+
+## Part 2
+
+```json
+{"reviewer":"Gemini 4 Argon","verdict":"approve_with_conditions","findings":[{"severity":"medium","file":"AXIS/multi_ai_review.py","line":101,"confidence":"high","explanation":"`sanitize_findings` does not verify that `findings` itself is a `list` (or enforce a maximum item count), nor does it validate `confidence` against an allowlist (unlike `severity`) or reject non-positive `line` numbers (`<= 0`).","suggested_fix":"Check `if not isinstance(findings, list): raise ValueError(...)`, bound the number of findings, require `line is None or (_is_int(line) and line > 0)`, and validate `confidence.lower()` against `{'high', 'medium', 'low'}`."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":119,"confidence":"high","explanation":"If a model returns `\"suggested_fix\": null` in a finding JSON object, `'suggested_fix' in finding` is true and `_text(None, ...)` raises `ValueError`, rejecting an otherwise valid review response.","suggested_fix":"Ignore or normalize null values: `if finding.get('suggested_fix') is not None: item['suggested_fix'] = _text(finding['suggested_fix'], 'suggested_fix', 4000)`."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":73,"confidence":"medium","explanation":"`check_response` allows `eval_count == 0` when `done_reason == 'stop'`, letting empty model completions pass completeness checks before downstream parsing.","suggested_fix":"Require `count > 0` in `check_response`: `if not _is_int(count) or count <= 0: raise ResponseUnverifiable('eval_count missing or invalid')`."}],"not_reviewed":["Definitions of SECRET_PATTERNS, SEVERITIES, FINDING_KEYS, NUM_PREDICT, and META_TIMEOUT outside this hunk","Exception handling following line 180 in AXIS/multi_ai_review.py","AXIS/vector_upgrade.py changes and unit tests not present in part 2 of 7"]}
+```
+
+## Part 3
+
+```json
+{"reviewer":"Gemini 4 Argon (Medium)","verdict":"approve_with_conditions","findings":[{"severity":"medium","file":"AXIS/multi_ai_review.py","line":208,"confidence":"high","explanation":"`report['prompt_eval_count']` and `report['eval_count']` accept any integer returned by the provider, including negative values or astronomically large integers, before `check_response()` validates them, contradicting the comment that only bounded values are persisted.","suggested_fix":"Validate bounds before persisting: `v = raw.get(key); report[key] = v if _is_int(v) and 0 <= v <= 1_000_000 else None`."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":211,"confidence":"high","explanation":"`received = raw['message']['content']` is assigned before type checking. If an untrusted provider returns a non-string `content` (e.g., list or dict), `received` is not a string, yet on failure `str(received)` is serialized into `raw_response_excerpt` instead of failing cleanly on schema type.","suggested_fix":"Verify `isinstance(raw.get('message', {}).get('content'), str)` before assigning `received`, raising `ResponseUnverifiable('content missing or not str')` otherwise."},{"severity":"low","file":"AXIS/multi_ai_review.py","line":210,"confidence":"medium","explanation":"`scrub(done)[:40]` slices the string after redaction. If a secret near index 40 is replaced with `[REDACTED]`, the 40-character slice can truncate the `[REDACTED]` marker itself, producing confusing partial markers in the report.","suggested_fix":"Bound the input length prior to scrubbing (e.g., `scrub(done[:256])[:40]`) or only persist `done` if it matches an allowlist of known reasons (`{'stop', 'length', 'unload', 'load'}`)."}],"not_reviewed":["Parts 1, 2, 4, 5, 6, and 7 of the diff (including definitions of check_response, sanitize_findings, scrub, bundle, and vector_upgrade.verify outside this hunk)"]}
+```
+
+## Part 7
+
+NOT RUN. Step 1 (file read, gemini-3.8-flash-high) returned "Error: Request timed out"; the single inline fallback (gemini-4-argon-medium) also returned "Error: Request timed out". No response exists. This is the vector_upgrade.py code part.
+
+## Part 4
+
+```json
+{"reviewer":"Gemini 4 Argon","verdict":"approve_with_conditions","findings":[{"severity":"low","file":"AXIS/test_multi_ai_review.py","line":239,"confidence":"high","explanation":"`test_invalid_fields_fail` and `test_findings_container_errors_named` test invalid field values and top-level container types, but do not test non-dict elements inside `findings` (e.g., `{\"findings\": [null]}`) or findings missing required keys.","suggested_fix":"Add subtests in `test_invalid_fields_fail` for non-dict finding entries and findings with omitted required keys (`severity`, `file`, `confidence`, `explanation`)."},{"severity":"low","file":"AXIS/test_multi_ai_review.py","line":251,"confidence":"medium","explanation":"`test_scrub_patterns` verifies single URL credential redaction (`https://user:pw123@host/x`), but does not test lines containing a URL followed by a later `@` (e.g., an email address) to guard against greedy matching across `@` tokens.","suggested_fix":"Add a test case such as `m.scrub('https://user:pw123@host/x contact dev@example.com')` asserting the password is redacted while `host/x contact dev` is preserved."},{"severity":"low","file":"AXIS/test_multi_ai_review.py","line":199,"confidence":"medium","explanation":"`test_bad_metadata_fails_closed` covers zero and non-int `prompt_eval_count`, but omits negative integers (`-1`) and boolean/integer `done_reason` values.","suggested_fix":"Add `('prompt negative', dict(prompt_eval=lambda n: -1))` and `('done bool', dict(done_reason=True))` to `cases` in `test_bad_metadata_fails_closed`."}],"not_reviewed":["AXIS/multi_ai_review.py","AXIS/vector_upgrade.py","AXIS/test_multi_ai_review.py (lines 1-135 and 320+)","Parts 1-3 and 5-7 of the diff"]}
+```
+
+## Part 5
+
+```json
+{"reviewer":"Gemini","verdict":"approve","findings":[],"not_reviewed":["AXIS/multi_ai_review.py (not included in part 5 of 7 diff)","AXIS/vector_upgrade.py (not included in part 5 of 7 diff)","AXIS/test_vector_upgrade_sandbox.py (lines 5 onward not included in part 5 of 7 diff)"]}
+```
+
+## Part 6
+
+```json
+{"reviewer":"Gemini 4 Argon","verdict":"approve","findings":[{"severity":"low","file":"AXIS/test_vector_upgrade_sandbox.py","line":98,"confidence":"high","explanation":"Timeout cleanup tests cover returncode=0 and OSError, but do not cover non-zero exit codes or subprocess.TimeoutExpired from 'docker rm -f', nor do they verify that the timeout failure report is persisted to SQLite via vu.detail(uid)['report'].","suggested_fix":"Add subtests or assertions for cleanup returncode!=0, subprocess.TimeoutExpired on cleanup, and self.assertEqual(vu.detail(uid)['report'], result['report'])."},{"severity":"low","file":"AXIS/test_vector_upgrade_sandbox.py","line":61,"confidence":"high","explanation":"test_docker_command_has_container_name verifies the container name prefix and character set for a single run, but does not verify that repeated verify() invocations produce unique container names or that unexpected characters in uid are sanitized.","suggested_fix":"Verify two runs produce distinct '--name' values and test uid sanitization when non-alphanumeric characters are present."},{"severity":"info","file":"AXIS/test_vector_upgrade_sandbox.py","line":118,"confidence":"high","explanation":"test_unsafe_mount_path_not_run checks ',', '=', and ASCII C0 control char '\\x01', but omits DEL/C1 control characters (ord 127..159) enforced by vector_upgrade.verify().","suggested_fix":"Include 'a\\x7fb' and 'a\\x80b' in the bad path tuple in test_unsafe_mount_path_not_run."},{"severity":"info","file":"AXIS/test_vector_upgrade_sandbox.py","line":133,"confidence":"high","explanation":"test_non_utf8_locale_output_is_recorded checks that valid UTF-8 ('Ğ') appears in the report, but does not assert that malformed bytes ('\\x81\\xff') are replaced with U+FFFD ('\\ufffd').","suggested_fix":"Add self.assertIn('\\ufffd', result['report']) to confirm errors='replace' behavior."}],"not_reviewed":["AXIS/multi_ai_review.py (not in part 6 of 7 diff)","AXIS/vector_upgrade.py (implementation hunks outside part 6 of 7 diff)"]}
+```

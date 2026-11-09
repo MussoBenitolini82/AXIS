@@ -10,14 +10,17 @@ TESTS=DATA/'behavior_specs'; TESTS.mkdir(exist_ok=True)
 # Only opt-in, narrowly scoped Python modules. server.py and approval/security code excluded.
 ALLOWED={'research_extensions.py','skills_helpers.py'}
 def connection():
- c=sqlite3.connect(DB, factory=ClosingConnection);c.row_factory=sqlite3.Row
- c.execute('CREATE TABLE IF NOT EXISTS upgrades(id TEXT PRIMARY KEY, target TEXT, description TEXT, digest TEXT, status TEXT, report TEXT, backup TEXT, created TEXT)');c.commit();return c
+ c=sqlite3.connect(DB, factory=ClosingConnection,timeout=15);c.row_factory=sqlite3.Row
+ try:c.execute('CREATE TABLE IF NOT EXISTS upgrades(id TEXT PRIMARY KEY, target TEXT, description TEXT, digest TEXT, status TEXT, report TEXT, backup TEXT, created TEXT)');c.commit()
+ except BaseException:c.close();raise
+ return c
 def safe_target(name):
  if name not in ALLOWED:raise ValueError('Bu çekirdek dosyası otomatik güncellemeye kapalı')
  return ROOT/name
 def validate(code):
  if not isinstance(code,str) or not code.strip() or len(code)>100000:raise ValueError('Geçersiz kod')
- ast.parse(code)
+ try:ast.parse(code)
+ except SyntaxError as e:raise ValueError(f'Sözdizimi hatası: line {e.lineno}') from None
  return code
 CONTRACT_TEST = """import ast,pathlib,unittest
 class Contract(unittest.TestCase):
@@ -93,14 +96,15 @@ sys.exit(0 if result.wasSuccessful() and len(cases)>0 else 1)
 
 def docker_available():
  try:
-  p=subprocess.run(['docker','info','--format','{{.ServerVersion}}'],capture_output=True,text=True,timeout=8)
+  p=subprocess.run(['docker','info','--format','{{.ServerVersion}}'],capture_output=True,encoding='utf-8',errors='replace',timeout=8)
   return p.returncode==0
  except (OSError,subprocess.TimeoutExpired):return False
 def propose(target,code,description=''):
  safe_target(target);validate(code)
  uid=uuid.uuid4().hex;digest=hashlib.sha256(code.encode()).hexdigest()
  with LOCK:
-  (DATA/(uid+'.py')).write_text(code,encoding='utf-8')
+  # Exact UTF-8 bytes: write_text would turn LF into CRLF on Windows and break the digest.
+  (DATA/(uid+'.py')).write_bytes(code.encode())
   with connection() as db:db.execute('INSERT INTO upgrades VALUES (?,?,?,?,?,?,?,?)',(uid,target,str(description)[:500],digest,'pending','Henüz test edilmedi','',datetime.now(timezone.utc).isoformat()))
  return detail(uid)
 def detail(uid):
@@ -125,8 +129,8 @@ def verify(uid):
    report='BLOCKED: Docker Engine bulunamadı; öneri çalıştırılmadı. Docker Desktop Linux containers gerekir.'
    with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
    return {'passed':False,'report':report}
-  staged=DATA/(uid+'.py');code=staged.read_text(encoding='utf-8')
-  if hashlib.sha256(code.encode()).hexdigest()!=r['digest']:raise ValueError('Kod değişmiş')
+  staged=DATA/(uid+'.py');raw=staged.read_bytes()
+  if hashlib.sha256(raw).hexdigest()!=r['digest']:raise ValueError('Kod değişmiş')
   # Windows: a lingering handle (AV scan, Docker file share) must not discard the recorded result.
   with tempfile.TemporaryDirectory(prefix='vector_test_',ignore_cleanup_errors=True) as tmp:
    p=Path(tmp);src=str(p.resolve())
@@ -135,7 +139,7 @@ def verify(uid):
     report='FAIL: güvensiz bağlama yolu'
     with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
     return {'passed':False,'report':report}
-   (p/r['target']).write_text(code,encoding='utf-8')
+   (p/r['target']).write_bytes(raw)
    (p/'test_contract.py').write_text(CONTRACT_TEST,encoding='utf-8')
    cases=behavior_cases(uid)['cases']
    if cases:
@@ -160,6 +164,11 @@ def verify(uid):
    except OSError as exc:passed=False;report='FAIL: Docker çalıştırılamadı: '+type(exc).__name__
   with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
   return {'passed':passed,'report':report}
+def _replace_from(src,dest,tag):
+ """Atomic copy: write a sibling temp file, then os.replace onto dest."""
+ temp=dest.with_name(dest.name+'.'+tag+'.tmp')
+ try:shutil.copy2(src,temp);os.replace(temp,dest)
+ finally:temp.unlink(missing_ok=True)
 def decide(uid,action,confirmation=''):
  if action not in ('approve','reject'):raise ValueError('Geçersiz işlem')
  with LOCK:
@@ -178,11 +187,18 @@ def decide(uid,action,confirmation=''):
   if dest.exists():
    backup=str(DATA/(uid+'.backup'))
    shutil.copy2(dest,backup)
-  temp=dest.with_name(dest.name+'.'+uid+'.tmp')
+  # The UPDATE runs first but is committed only after the atomic file replace; if the replace
+  # fails the transaction rolls back, and if the commit fails the original file is restored.
+  replaced=False
   try:
-   shutil.copy2(src,temp);os.replace(temp,dest)
-   with connection() as db:db.execute('UPDATE upgrades SET status=?,backup=? WHERE id=?',('applied',backup,uid))
-  finally:temp.unlink(missing_ok=True)
+   with connection() as db:
+    db.execute('UPDATE upgrades SET status=?,backup=? WHERE id=?',('applied',backup,uid))
+    _replace_from(src,dest,uid);replaced=True
+  except BaseException:
+   if replaced:
+    if backup:_replace_from(Path(backup),dest,uid+'.undo')
+    else:dest.unlink(missing_ok=True)
+   raise
   return {'status':'applied','restart_required':True,'backup':bool(backup)}
 def rollback(uid,confirmation=''):
  if confirmation!='GERI_AL':raise ValueError('Geri alma onayı gerekiyor')
@@ -192,7 +208,17 @@ def rollback(uid,confirmation=''):
   dest=safe_target(r['target']);backup=Path(r['backup']) if r['backup'] else None
   if backup and not backup.exists():raise ValueError('Yedek bulunamadı')
   if not dest.exists() or hashlib.sha256(dest.read_bytes()).hexdigest()!=r['digest']:raise ValueError('Dosya sonradan değişmiş; geri alma başka değişiklikleri ezebilir')
-  if backup:shutil.copy2(backup,dest)
-  else:dest.unlink(missing_ok=True)
-  with connection() as db:db.execute('UPDATE upgrades SET status=? WHERE id=?',('rolled_back',uid))
+  # Same guarantee as decide(): commit only after the atomic file change, undo it if the commit fails.
+  undo=dest.with_name(dest.name+'.'+uid+'.undo');changed=False
+  try:
+   with connection() as db:
+    db.execute('UPDATE upgrades SET status=? WHERE id=?',('rolled_back',uid))
+    if backup:shutil.copy2(dest,undo);_replace_from(backup,dest,uid+'.rb')
+    else:os.replace(dest,undo)
+    changed=True
+  except BaseException:
+   if changed:os.replace(undo,dest)
+   else:undo.unlink(missing_ok=True)
+   raise
+  undo.unlink(missing_ok=True)
   return {'status':'rolled_back','restart_required':True}
