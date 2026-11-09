@@ -128,7 +128,13 @@ def verify(uid):
   staged=DATA/(uid+'.py');code=staged.read_text(encoding='utf-8')
   if hashlib.sha256(code.encode()).hexdigest()!=r['digest']:raise ValueError('Kod değişmiş')
   with tempfile.TemporaryDirectory(prefix='vector_test_') as tmp:
-   p=Path(tmp);(p/r['target']).write_text(code,encoding='utf-8')
+   p=Path(tmp);src=str(p.resolve())
+   # Docker parses --mount as CSV key=value pairs; refuse paths that could add mount options.
+   if any(ch in ',=' or ord(ch)<32 or 127<=ord(ch)<160 for ch in src):
+    report='FAIL: güvensiz bağlama yolu'
+    with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
+    return {'passed':False,'report':report}
+   (p/r['target']).write_text(code,encoding='utf-8')
    (p/'test_contract.py').write_text(CONTRACT_TEST,encoding='utf-8')
    cases=behavior_cases(uid)['cases']
    if cases:
@@ -137,7 +143,7 @@ def verify(uid):
    # Deterministic built-in behavior tests; never accept agent-written tests as proof of safety.
    script='import ast,pathlib,unittest; p=pathlib.Path("/work/'+r['target']+'"); tree=ast.parse(p.read_text()); assert len(tree.body)>0; print("SYNTAX_OK"); result=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover("/work",pattern="test_*.py")); raise SystemExit(0 if result.wasSuccessful() and result.testsRun>0 else 1)'
    name=''.join(ch if ch.isalnum() and ch.isascii() or ch in '_.-' else '_' for ch in f'axis-verify-{uid[:12]}-{uuid.uuid4().hex[:8]}')
-   cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
+   cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={src},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
    try:
     proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]

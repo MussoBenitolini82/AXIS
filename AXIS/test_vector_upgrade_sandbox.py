@@ -115,6 +115,21 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
         self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
         self.assertIn('kaldırılamadı', result['report'])
 
+    def test_unsafe_mount_path_not_run(self):
+        for bad in ('a,readonly=false', 'a=b', 'a\x01b'):
+            with self.subTest(bad=bad):
+                uid = self._propose()
+                fake_tmp = mock.Mock()
+                fake_tmp.__enter__ = mock.Mock(return_value=str(Path(self.tmp.name) / bad))
+                fake_tmp.__exit__ = mock.Mock(return_value=False)
+                with mock.patch.object(vu, 'docker_available', return_value=True), \
+                     mock.patch.object(vu.tempfile, 'TemporaryDirectory', return_value=fake_tmp), \
+                     mock.patch.object(vu.subprocess, 'run') as run:
+                    result = vu.verify(uid)
+                run.assert_not_called()
+                self.assertEqual(result, {'passed': False, 'report': 'FAIL: güvensiz bağlama yolu'})
+                self.assertEqual(vu.detail(uid)['report'], 'FAIL: güvensiz bağlama yolu')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -137,6 +137,53 @@ class ReviewTests(unittest.TestCase):
             m.run(['axis_sqlite.py'], {'Reviewer':'x:cloud'}, Path(d), api)
         self.assertEqual(calls, ['tags'])
 
+    def test_bool_context_length_rejected(self):
+        with self.assertRaises(m.ContextTruncated):
+            m.context_limit({'model_info':{'qwen3.context_length':True}})
+        self.assertEqual(m.context_limit({'model_info':{'a.context_length':True, 'b.context_length':4096}}), 4096)
+
+    def test_cloud_backed_metadata_reason_kept(self):
+        base=fake_api()
+        def api(route, payload=None):
+            result=base(route, payload)
+            if route=='show':
+                result['remote_host']='https://ollama.com:443'
+            return result
+        with tempfile.TemporaryDirectory() as d:
+            _, result=m.run(['axis_sqlite.py'], {'Reviewer':'local:1'}, Path(d), api)
+        self.assertNotIn('chat', base.payloads)
+        self.assertEqual(result['reports'][1]['status'], 'FAILED')
+        self.assertEqual(result['reports'][1]['reason'], 'ValueError: Cloud-backed models forbidden')
+
+    def test_bundle_rejects_empty_duplicate_and_non_regular(self):
+        with self.assertRaises(ValueError): m.bundle([])
+        with self.assertRaises(ValueError): m.bundle(['axis_sqlite.py', 'axis_sqlite.py'])
+        with self.assertRaises(ValueError): m.bundle(['axis_sqlite.py', './axis_sqlite.py'])
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d)/'pkg.py').mkdir()
+            with self.assertRaises(ValueError): m.bundle(['pkg.py'], root=Path(d))
+
+    def test_metadata_routes_use_short_timeout(self):
+        seen=[]
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n): return b'{}'
+        class Opener:
+            def open(self, req, timeout):
+                seen.append((req.full_url, timeout))
+                return Response()
+        def build_opener(*handlers):
+            self.assertTrue(any(isinstance(h, m.urllib.request.ProxyHandler) and h.proxies=={} for h in handlers))
+            self.assertTrue(any(isinstance(h, m.NoRedirect) for h in handlers))
+            return Opener()
+        with patch.object(m.urllib.request, 'build_opener', build_opener):
+            m.local_api('tags')
+            m.local_api('show', {'model':'local:1'})
+            m.local_api('chat', {'model':'local:1'})
+        self.assertEqual(seen, [('http://127.0.0.1:11434/api/tags', 15), ('http://127.0.0.1:11434/api/show', 15),
+                                ('http://127.0.0.1:11434/api/chat', m.CHAT_TIMEOUT)])
+
 def finding(**kw):
     base={"severity":"low","file":"a.py","line":1,"confidence":"high","explanation":"x"}
     base.update(kw)
