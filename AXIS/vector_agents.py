@@ -1,4 +1,5 @@
 """Reviewable multi-role coding pipeline. Ollama roles are prompts, not independent models."""
+from axis_sqlite import ClosingConnection
 import ast, difflib, hashlib, json, os, re, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +11,7 @@ LOCK=threading.RLock()
 MAX_CHARS=24000
 
 def dbconn():
-    db=sqlite3.connect(DB,timeout=20)
+    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=20)
     db.row_factory=sqlite3.Row
     db.execute('CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, target TEXT, request TEXT, status TEXT, plan TEXT, review TEXT, proposal_id TEXT, created TEXT)')
     db.commit()

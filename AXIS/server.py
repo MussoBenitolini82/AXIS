@@ -1,3 +1,4 @@
+from axis_sqlite import ClosingConnection
 import axis_v13
 import axis_learning
 import axis_executor
@@ -20,7 +21,7 @@ LOCK=threading.RLock()
 POOL=ThreadPoolExecutor(max_workers=3)
 
 def connect():
-    db=sqlite3.connect(DB,timeout=20)
+    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=20)
     db.row_factory=sqlite3.Row
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,label TEXT NOT NULL,kind TEXT NOT NULL,description TEXT DEFAULT "",created TEXT NOT NULL)')

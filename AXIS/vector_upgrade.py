@@ -1,4 +1,5 @@
 """Approval-gated, Docker-tested changes. Never execute generated code on the host."""
+from axis_sqlite import ClosingConnection
 import ast, difflib, hashlib, json, os, shutil, sqlite3, subprocess, tempfile, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,7 @@ TESTS=DATA/'behavior_specs'; TESTS.mkdir(exist_ok=True)
 # Only opt-in, narrowly scoped Python modules. server.py and approval/security code excluded.
 ALLOWED={'research_extensions.py','skills_helpers.py'}
 def connection():
- c=sqlite3.connect(DB);c.row_factory=sqlite3.Row
+ c=sqlite3.connect(DB, factory=ClosingConnection);c.row_factory=sqlite3.Row
  c.execute('CREATE TABLE IF NOT EXISTS upgrades(id TEXT PRIMARY KEY, target TEXT, description TEXT, digest TEXT, status TEXT, report TEXT, backup TEXT, created TEXT)');c.commit();return c
 def safe_target(name):
  if name not in ALLOWED:raise ValueError('Bu çekirdek dosyası otomatik güncellemeye kapalı')
@@ -135,7 +136,7 @@ def verify(uid):
     (p/'test_behavior.py').write_text(BEHAVIOR_RUNNER.replace('CANDIDATE',r['target']),encoding='utf-8')
    # Deterministic built-in behavior tests; never accept agent-written tests as proof of safety.
    script='import ast,pathlib,unittest; p=pathlib.Path("/work/'+r['target']+'"); tree=ast.parse(p.read_text()); assert len(tree.body)>0; print("SYNTAX_OK"); result=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover("/work",pattern="test_*.py")); raise SystemExit(0 if result.wasSuccessful() and result.testsRun>0 else 1)'
-   cmd=['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
+   cmd=['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
    try:
     proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]

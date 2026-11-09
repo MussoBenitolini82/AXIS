@@ -1,4 +1,5 @@
 """Approval-gated local skill changes. No arbitrary execution or core self-editing."""
+from axis_sqlite import ClosingConnection
 import ast, difflib, hashlib, json, os, py_compile, shutil, sqlite3, tempfile, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +11,7 @@ for d in (SKILLS,PENDING,BACKUPS): d.mkdir(exist_ok=True)
 LOCK=threading.RLock()
 DB=ROOT/'evolution.db'
 def db():
- c=sqlite3.connect(DB);c.row_factory=sqlite3.Row
+ c=sqlite3.connect(DB, factory=ClosingConnection);c.row_factory=sqlite3.Row
  c.execute('CREATE TABLE IF NOT EXISTS proposals(id TEXT PRIMARY KEY, skill TEXT, status TEXT, created TEXT, sha256 TEXT, summary TEXT, test_result TEXT)');c.commit();return c
 def valid_name(name):
  if not isinstance(name,str) or not (1<=len(name)<=64) or not name.isidentifier() or name.startswith('_'):raise ValueError('Geçersiz beceri adı')

@@ -1,6 +1,7 @@
 """V10 central experience log and evidence-gated reusable workflow learning.
 No LLM weights are updated. Proposed skills never execute arbitrary code.
 """
+from axis_sqlite import ClosingConnection
 import json, os, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +13,7 @@ TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_resear
 
 def now():return datetime.now(timezone.utc).isoformat()
 def conn():
-    db=sqlite3.connect(DB,timeout=15)
+    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15)
     db.row_factory=sqlite3.Row
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS experiences(id TEXT PRIMARY KEY,task_id TEXT,agent TEXT,action TEXT,tool TEXT,status TEXT,summary TEXT,evidence TEXT,created TEXT)')

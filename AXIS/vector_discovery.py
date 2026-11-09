@@ -1,6 +1,7 @@
 """V9: capability audit, explicit agent proposals, parallel read-only agent tasks.
 No remote code/model installation and no arbitrary tool execution.
 """
+from axis_sqlite import ClosingConnection
 import json, os, sqlite3, threading, uuid, urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
@@ -33,7 +34,7 @@ CANDIDATES={
  'browser':('Tarayıcı otomasyon uzmanı','Web arayüzü üzerinde kontrollü işlem','Tarayıcı aracı ve her yazma işlemi için kullanıcı onayı gerekir'),
 }
 def conn():
- db=sqlite3.connect(DB,timeout=15);db.row_factory=sqlite3.Row
+ db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15);db.row_factory=sqlite3.Row
  db.execute('CREATE TABLE IF NOT EXISTS agents(id TEXT PRIMARY KEY,capability TEXT UNIQUE,name TEXT,description TEXT,requirements TEXT,status TEXT,created TEXT)')
  db.execute('CREATE TABLE IF NOT EXISTS scans(id TEXT PRIMARY KEY,request TEXT,report TEXT,created TEXT)')
  db.commit();return db

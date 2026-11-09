@@ -1,4 +1,5 @@
 """AXIS V11: approved read-only workflow executor. No eval, shell, arbitrary Python or network writes."""
+from axis_sqlite import ClosingConnection
 import json, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,7 @@ LOCK=threading.RLock()
 SAFE_TOOLS={'count_nodes','list_recent_research','search_memory'}
 
 def _conn():
-    db=sqlite3.connect(DB,timeout=15)
+    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15)
     db.row_factory=sqlite3.Row
     db.execute('CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, skill_id TEXT, status TEXT, args TEXT, results TEXT, created TEXT)')
     db.commit()

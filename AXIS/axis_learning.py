@@ -1,6 +1,7 @@
 """AXIS V12: event-based shared memory, deterministic recovery, skill composition.
 All automatic execution restricted to explicitly allowlisted read-only tools.
 """
+from axis_sqlite import ClosingConnection
 import json, sqlite3, threading, uuid
 from pathlib import Path
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ LOCK=threading.RLock()
 ALLOWED=frozenset(executor.SAFE_TOOLS)
 
 def connect():
-    db=sqlite3.connect(DB,timeout=15)
+    db=sqlite3.connect(DB, factory=ClosingConnection,timeout=15)
     db.row_factory=sqlite3.Row
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, task_id TEXT, agent TEXT, kind TEXT, tool TEXT, outcome TEXT, payload TEXT, created TEXT)')
