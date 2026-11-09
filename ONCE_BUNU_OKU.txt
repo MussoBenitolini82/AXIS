@@ -1,0 +1,1 @@
+AXIS V10: KURULUM.bat -> Ollama modeli -> BASLAT_AXIS.bat. V10 Central Brain paneli sayfanin altindadir. README_V10.md dosyasini okuyun.

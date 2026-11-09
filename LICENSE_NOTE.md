@@ -1,0 +1,1 @@
+Lisans henüz belirlenmedi. Bir açık kaynak lisansı seçilene kadar varsayılan telif hakkı kuralları geçerlidir.

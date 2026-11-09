@@ -1,8 +1,4 @@
 @echo off
-cd /d "%~dp0AXIS"
-if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" -m unittest discover -p "test*.py" -v
-) else (
-  python -m unittest discover -p "test*.py" -v
-)
+cd /d "%~dp0VECTOR"
+".venv\Scripts\python.exe" -m unittest discover -p "test_*.py" -v
 pause
