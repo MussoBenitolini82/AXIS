@@ -85,7 +85,7 @@ def health():
    ollama=r.status==200
    cloud=[m.get('name') for m in json.load(r).get('models',[]) if isinstance(m,dict) and (local_models.is_cloud_name(m.get('name')) or local_models.is_remote(m))]
  except Exception:pass
- return {'ollama_reachable':ollama,'cloud_models_refused':cloud,'torch_installed':module('torch'),'pypdf_installed':module('pypdf'),'docker_check':'Docker kontrolü yalnızca güncelleme testi sırasında yapılır','builtin_agents':list(BUILTINS),'approved_agents':[a['capability'] for a in installed()]}
+ return {'ollama_reachable':ollama,'cloud_models_refused':cloud,'torch_installed':module('torch'),'pypdf_installed':module('fitz'),'pymupdf_installed':module('fitz'),'docker_check':'Docker kontrolü yalnızca güncelleme testi sırasında yapılır','builtin_agents':list(BUILTINS),'approved_agents':[a['capability'] for a in installed()]}
 def parallel_readonly(request):
  """Run only the existing safe read-only tools concurrently, never untrusted generated code."""
  result=scan(request)
