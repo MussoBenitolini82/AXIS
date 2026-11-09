@@ -16,6 +16,12 @@ Bağlam penceresi: Ollama, `num_ctx` değerinden uzun bir istemin başını sess
 
 Çıktı: istekte `think: false` gönderilir (qwen3 düşünme çıktısı JSON'u bozmasın). Çıktı payı 4096 token'dır; `done_reason == 'length'` ya da `eval_count` ≥ payı ise yanıt eksiktir ve rol `FAILED: OutputTruncated` olur. Raporda `done_reason` ve `eval_count` saklanır. Yanıt alındıktan sonra JSON/şema hatası olursa ham yanıtın temizlenmiş (`scrub`) ilk 4000 karakteri `raw_response_excerpt` alanına yazılır.
 
+Fail-closed doğrulama: `/api/chat` yanıtında `prompt_eval_count` (bool olmayan int, > 0), `eval_count` (bool olmayan int, >= 0) ve `done_reason == 'stop'` yoksa ya da geçersizse rol `FAILED: ResponseUnverifiable` olur; `OutputTruncated` ve `ContextTruncated` korunur.
+
+Bulgu şeması: bulgular serileştirilmiş JSON üzerinde `scrub` ile değil, doğrulanmış alanlardan yeni sözlükler kurularak temizlenir. Yalnızca severity (critical/high/medium/low/info; küçük harfe çevrilir), file (str, en çok 300), line (int ya da None), confidence (str, en çok 50), explanation (str, en çok 4000) ve isteğe bağlı suggested_fix (str, en çok 4000) saklanır; fazla anahtarlar atılır ve sayısı `dropped_finding_keys` alanına yazılır. Geçersiz alan rolü `FAILED` yapar, neden `ValueError: Invalid finding schema: <alan>` olur (ham model içeriği nedene yazılmaz).
+
+Maskeleme (`scrub`): password/passwd/secret/token/api_key/access_key/client_secret anahtar-değer çiftleri (tırnaklı JSON/Python biçimleri dahil; değer tırnaklarıyla birlikte), Bearer belirteçleri, AKIA, github_pat_, gh*_, xox*-, sk-, AIza anahtarları, `şema://kullanıcı:parola@sunucu` kimlik bilgileri ve çok satırlı PEM PRIVATE KEY blokları.
+
 Programatik `run(paths, assignments)` çağrısı her role farklı model atayabilir. Rol anahtarları: Developer, Reviewer, Security Auditor, Test Engineer. Coordinator model kullanmadan özet çıkarır. Aynı modelde farklı rol istemleri bağımsız sağlayıcı incelemesi sayılmaz.
 
 Her çalışma reports/ altında benzersiz bir klasör, beş görev/rol raporu ve summary.json oluşturur. Durumlar COMPLETED, FAILED veya NOT_RUN'dır. Kaynak hash'i, zaman, görev, sağlayıcı/model, bulgular ve eksik bağlantılar saklanır. Başarılı görünen model yanıtı otomatik onay değildir.

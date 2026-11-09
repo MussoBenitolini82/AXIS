@@ -58,6 +58,63 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
             args = call[0][0] if call[0] else []
             self.assertFalse(len(args) > 1 and args[:2] == ['docker', 'run'])
 
+    def test_docker_command_has_container_name(self):
+        uid = self._propose()
+        with mock.patch.object(vu, 'docker_available', return_value=True), \
+             mock.patch.object(vu.subprocess, 'run',
+                               return_value=mock.Mock(returncode=0, stdout='', stderr='')) as run:
+            vu.verify(uid)
+
+        cmd = run.call_args.args[0]
+        self.assertIn('--name', cmd)
+        name_index = cmd.index('--name')
+        self.assertEqual(name_index, cmd.index('--rm') + 1)
+        name = cmd[name_index + 1]
+        self.assertTrue(name.startswith('axis-verify-'))
+        self.assertTrue(all(ch.isascii() and (ch.isalnum() or ch in '_.-') for ch in name))
+
+    def test_timeout_removes_container(self):
+        uid = self._propose()
+
+        def timeout_then_cleanup(cmd, **kwargs):
+            if cmd[:2] == ['docker', 'run']:
+                raise vu.subprocess.TimeoutExpired(cmd, 35)
+            return mock.Mock(returncode=0)
+
+        with mock.patch.object(vu, 'docker_available', return_value=True), \
+             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup) as run:
+            result = vu.verify(uid)
+
+        self.assertEqual(run.call_count, 2)
+        first_cmd = run.call_args_list[0].args[0]
+        name = first_cmd[first_cmd.index('--name') + 1]
+        self.assertEqual(run.call_args_list[1].args, (['docker', 'rm', '-f', name],))
+        self.assertEqual(run.call_args_list[1].kwargs,
+                         {'capture_output': True, 'timeout': 15})
+        self.assertIs(result['passed'], False)
+        self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
+        self.assertIn('; konteyner kaldırıldı', result['report'])
+
+    def test_timeout_cleanup_oserror_is_reported(self):
+        uid = self._propose()
+
+        def timeout_then_cleanup_error(cmd, **kwargs):
+            if cmd[:2] == ['docker', 'run']:
+                raise vu.subprocess.TimeoutExpired(cmd, 35)
+            raise OSError('Docker cleanup failed')
+
+        with mock.patch.object(vu, 'docker_available', return_value=True), \
+             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup_error) as run:
+            result = vu.verify(uid)
+
+        self.assertEqual(run.call_count, 2)
+        first_cmd = run.call_args_list[0].args[0]
+        name = first_cmd[first_cmd.index('--name') + 1]
+        self.assertEqual(run.call_args_list[1].args, (['docker', 'rm', '-f', name],))
+        self.assertIs(result['passed'], False)
+        self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
+        self.assertIn('kaldırılamadı', result['report'])
+
 
 if __name__ == '__main__':
     unittest.main()

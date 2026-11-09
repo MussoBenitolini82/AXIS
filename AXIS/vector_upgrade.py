@@ -136,12 +136,19 @@ def verify(uid):
     (p/'test_behavior.py').write_text(BEHAVIOR_RUNNER.replace('CANDIDATE',r['target']),encoding='utf-8')
    # Deterministic built-in behavior tests; never accept agent-written tests as proof of safety.
    script='import ast,pathlib,unittest; p=pathlib.Path("/work/'+r['target']+'"); tree=ast.parse(p.read_text()); assert len(tree.body)>0; print("SYNTAX_OK"); result=unittest.TextTestRunner().run(unittest.defaultTestLoader.discover("/work",pattern="test_*.py")); raise SystemExit(0 if result.wasSuccessful() and result.testsRun>0 else 1)'
-   cmd=['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
+   name=''.join(ch if ch.isalnum() and ch.isascii() or ch in '_.-' else '_' for ch in f'axis-verify-{uid[:12]}-{uuid.uuid4().hex[:8]}')
+   cmd=['docker','run','--rm','--name',name,'--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={p.resolve()},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=32m','python:3.12-slim','python','-I','-c',script]
    try:
     proc=subprocess.run(cmd,capture_output=True,text=True,timeout=35)
     report=('PASS' if proc.returncode==0 else 'FAIL')+'\n'+(proc.stdout+'\n'+proc.stderr)[-4000:]
     passed=proc.returncode==0
-   except subprocess.TimeoutExpired:passed=False;report='FAIL: Docker test zaman aşımı'
+   except subprocess.TimeoutExpired:
+    passed=False;report='FAIL: Docker test zaman aşımı'
+    try:
+     cleanup=subprocess.run(['docker','rm','-f',name],capture_output=True,timeout=15)
+     report+='; konteyner kaldırıldı' if cleanup.returncode==0 else '; konteyner kaldırılamadı'
+    except (OSError,subprocess.TimeoutExpired):
+     report+='; konteyner kaldırılamadı'
   with connection() as db:db.execute('UPDATE upgrades SET report=? WHERE id=?',(report,uid))
   return {'passed':passed,'report':report}
 def decide(uid,action,confirmation=''):
