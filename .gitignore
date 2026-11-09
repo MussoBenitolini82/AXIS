@@ -18,3 +18,4 @@ AXIS/data/
 AXIS/models/
 AXIS/logs/
 .DS_Store
+reports/[0-9]*T[0-9]*-*/

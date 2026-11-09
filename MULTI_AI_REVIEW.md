@@ -10,7 +10,11 @@ Python 3.12 ortamınızla, depo kökünden:
 
 Bu komut model atamaz; bağlantı durumunu ve beş rolün çalıştırılmama nedenlerini raporlar. Kurulu, yerel bir model açıkça seçildiğinde:
 
-    python AXIS/multi_ai_review.py axis_sqlite.py --model MODEL_ADI
+    python AXIS/multi_ai_review.py axis_sqlite.py --model MODEL_ADI --timeout 600
+
+Bağlam penceresi: Ollama, `num_ctx` değerinden uzun bir istemin başını sessizce atar. Bu yüzden araç `num_ctx` değerini paket boyutundan, karakter başına 2,5 token varsayımıyla ve çıktı payını ekleyerek hesaplar. Paket modelin bağlam sınırını aşıyorsa model çağrılmaz. Model bağlam sınırını bildirmiyorsa ya da istem pencereyi doldurmuşsa (`prompt_eval_count` ≥ `num_ctx` − çıktı payı) rol `FAILED: ContextTruncated` olur. Raporda `num_ctx` ve `prompt_eval_count` saklanır.
+
+Çıktı: istekte `think: false` gönderilir (qwen3 düşünme çıktısı JSON'u bozmasın). Çıktı payı 4096 token'dır; `done_reason == 'length'` ya da `eval_count` ≥ payı ise yanıt eksiktir ve rol `FAILED: OutputTruncated` olur. Raporda `done_reason` ve `eval_count` saklanır. Yanıt alındıktan sonra JSON/şema hatası olursa ham yanıtın temizlenmiş (`scrub`) ilk 4000 karakteri `raw_response_excerpt` alanına yazılır.
 
 Programatik `run(paths, assignments)` çağrısı her role farklı model atayabilir. Rol anahtarları: Developer, Reviewer, Security Auditor, Test Engineer. Coordinator model kullanmadan özet çıkarır. Aynı modelde farklı rol istemleri bağımsız sağlayıcı incelemesi sayılmaz.
 
