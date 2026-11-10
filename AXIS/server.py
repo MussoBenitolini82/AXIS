@@ -78,7 +78,9 @@ def search_openalex(topic,limit=RESEARCH_DEFAULT_LIMIT):
     for w in data.get('results',[]):
         loc=w.get('primary_location') or {}
         url=(loc.get('landing_page_url') or w.get('doi') or w.get('id') or '')
-        out.append({'id':w.get('id') or str(uuid.uuid4()),'title':w.get('title') or 'Başlıksız','year':w.get('publication_year'),'doi':w.get('doi'),'url':url,'abstract':clean_abstract(w.get('abstract_inverted_index')),'concepts':[x['display_name'] for x in w.get('concepts',[]) if x.get('score',0)>=.5][:8]})
+        # OpenAlex may send "concepts": null or entries without a name/score; neither may abort the whole search.
+        concepts=[x['display_name'] for x in (w.get('concepts') or []) if isinstance(x,dict) and x.get('display_name') and (x.get('score') or 0)>=.5][:8]
+        out.append({'id':w.get('id') or str(uuid.uuid4()),'title':w.get('title') or 'Başlıksız','year':w.get('publication_year'),'doi':w.get('doi'),'url':url,'abstract':clean_abstract(w.get('abstract_inverted_index')),'concepts':concepts})
     return out
 
 ATOM='{http://www.w3.org/2005/Atom}'
@@ -102,11 +104,11 @@ def search_arxiv(topic,limit=RESEARCH_DEFAULT_LIMIT):
                     'concepts':[c.get('term') for c in e.findall(ATOM+'category') if c.get('term')][:8]})
     return out
 
-def friendly_error(e):
+def friendly_error(e,source='OpenAlex'):
     if isinstance(e,urllib.error.HTTPError) and e.code==429:
         wait=e.headers.get('Retry-After') if e.headers else None
         hours=f' (yaklaşık {round(int(wait)/3600,1)} saat sonra sıfırlanır)' if wait and wait.isdigit() else ''
-        return 'OpenAlex günlük ücretsiz kotası doldu'+hours
+        return (source+' günlük ücretsiz kotası doldu' if source=='OpenAlex' else source+' istek sınırına ulaşıldı')+hours
     return f'{type(e).__name__}: {e}'
 
 def find_works(topic,limit):
@@ -118,7 +120,7 @@ def find_works(topic,limit):
     try:
         return search_arxiv(topic,limit),'arXiv',first+' → arXiv kullanıldı'
     except Exception as e:
-        raise RuntimeError(first+'; arXiv de başarısız: '+friendly_error(e)) from None
+        raise RuntimeError(first+'; arXiv de başarısız: '+friendly_error(e,'arXiv')) from None
 
 def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
     try:
@@ -136,12 +138,25 @@ def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
                     link(db,paper,c,'etiket')
             db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{source}: {limit} kayıt istendi · {len(works)} akademik kayıt işlendi'+(f' · {note}' if note else ''),job_id))
             db.commit()
-        if AFTER_RESEARCH: AFTER_RESEARCH()  # running server only: embed new abstracts in the background
-        brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception as e:
-        brain.log('research','openalex_search','research','failure',str(e)[:1000],job_id)
+        # Mark the job first: a failing audit log must never leave it "running" forever.
+        reason=(str(e) or type(e).__name__)
         with LOCK,connect() as db:
-            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('failed',str(e)[:400],job_id));db.commit()
+            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('failed',reason[:400],job_id));db.commit()
+        try:brain.log('research','literature_search','research','failure',reason[:1000],job_id)
+        except Exception:pass
+        return
+    # The job is already committed as completed; the audit log is best-effort.
+    try:brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
+    except Exception:pass
+    if AFTER_RESEARCH: AFTER_RESEARCH()  # running server only: embed new abstracts in the background
+
+def fail_stale_jobs():
+    """At start-up no research thread is alive, so any job still 'running' was cut off by a restart."""
+    with LOCK,connect() as db:
+        n=db.execute("UPDATE jobs SET status='failed',details='Sunucu yeniden başlatıldı; araştırma tamamlanamadı' WHERE status='running'").rowcount
+        db.commit()
+    return n
 
 AFTER_RESEARCH=None  # set in __main__; tests and imports never start background embedding
 
@@ -253,7 +268,21 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         self.send_response(code);self.send_header('Content-Type',ctype+'; charset=utf-8');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
+    def local_host(self):
+        """DNS-rebinding guard: a browser that reached us through a foreign host name is refused.
+        Only the name is checked (tests and tools use other ports); a missing Host header is a non-browser client."""
+        host=self.headers.get('Host','').strip().lower()
+        if not host: return True
+        name=host[:host.index(']')+1] if host.startswith('[') and ']' in host else host.rsplit(':',1)[0] if ':' in host else host
+        return name in ('127.0.0.1','localhost','[::1]')
     def do_GET(self):
+        if not self.local_host(): return self.send(403,{'error':'Yalnızca yerel adresten erişilebilir'})
+        # Lookups such as /api/upgrade-detail?id=… raise ValueError for unknown ids: answer with JSON, not a dropped connection.
+        try: self.route_get()
+        except ValueError as e: self.send(400,{'error':str(e)})
+        except (BrokenPipeError,ConnectionError): pass
+        except Exception as e: self.send(500,{'error':str(e)[:350]})
+    def route_get(self):
         p=urllib.parse.urlsplit(self.path)
         if p.path=='/': return self.send(200,(ROOT/'index.html').read_bytes(),'text/html')
         if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'auto_apply_upgrades':upgrades.auto_apply_enabled(),'features':['question_answering','literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
@@ -293,6 +322,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._axis_post=True
         self._axis_task=__import__('uuid').uuid4().hex
+        if not self.local_host(): return self.send(403,{'error':'Yalnızca yerel adresten erişilebilir'})
         # Reject browser cross-origin writes to the local management API.
         origin=self.headers.get('Origin','')
         if origin and origin not in ('http://127.0.0.1:8765','http://localhost:8765'):
@@ -302,6 +332,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path not in ('/api/research','/api/ask','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models'): return self.send(404,{'error':'Not found'})
         try:
             length=int(self.headers.get('Content-Length','0'))
+            if length<0: raise ValueError('Geçersiz Content-Length')  # read(-1) would block until the client hangs up
             if length>11500000: raise ValueError('İstek çok büyük')
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict): raise ValueError('JSON nesnesi bekleniyor')
@@ -351,7 +382,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
 
 if __name__=='__main__':
+    # Run as a script this module is '__main__'; vector_intelligence does 'import server'. Without the alias
+    # that would load a second copy with its own LOCK, POOL and ASK_JOBS.
+    import sys
+    sys.modules.setdefault('server',sys.modules[__name__])
     with connect(): pass
+    stale=fail_stale_jobs()
+    if stale: print('Yarım kalan araştırma işi kapatıldı:',stale)
     # Auto-apply of core upgrades (user decision 2026-11-10; kill switch AXIS_AUTO_APPLY=0).
     upgrades.SCHEDULER=lambda uid: POOL.submit(upgrades.auto_pipeline,uid)
     queued=upgrades.sweep_untested()

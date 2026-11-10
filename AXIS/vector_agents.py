@@ -47,13 +47,17 @@ def run(request,target='research_extensions.py'):
         if verdict!='VERDICT: PASS':
             status='review_failed';proposal_id=''
         else:
-            proposal=upgrades.propose(target,code,'Çok-ajanlı öneri: '+request[:300]);proposal_id=proposal['id'];status='awaiting_tests_and_approval'
+            # Not queued for auto-apply yet: the behavior cases below must be attached first, otherwise the
+            # background Docker test could pass and apply the code before its tests exist.
+            proposal=upgrades.propose(target,code,'Çok-ajanlı öneri: '+request[:300],schedule=False);proposal_id=proposal['id'];status='awaiting_tests_and_approval'
             try:
                 raw=llm('Test tasarım ajanısın. Yalnızca JSON dizisi döndür. Her nesne function, args (liste), expected (JSON) alanları içersin. Yalnızca saf fonksiyonlar için 2-8 işlevsel örnek hazırla. Testleri kodun uygulamasına göre değil, kullanıcı isteğine göre tasarla. Açıklama yazma.','İstek: '+request+'\nKod:\n'+code[:12000])
                 cases=json.loads(raw.strip().removeprefix('```json').removesuffix('```').strip())
                 upgrades.attach_behavior_cases(proposal_id,cases)
-            except (ValueError,TypeError,KeyError,StopIteration):
-                pass
+            except Exception:
+                pass  # test design is best-effort (the model may be slow or unreachable); the proposal stays valid
+            finally:
+                upgrades.schedule_auto(proposal_id)
         with LOCK,dbconn() as db:
             db.execute('UPDATE runs SET status=?,plan=?,review=?,proposal_id=? WHERE id=?',(status,plan[:14000],review[:14000],proposal_id,rid))
         return detail(rid)
