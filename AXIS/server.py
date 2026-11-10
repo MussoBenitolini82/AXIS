@@ -171,6 +171,22 @@ def status():
     with LOCK,connect() as db:
         return {'jobs':[dict(x) for x in db.execute('SELECT * FROM jobs ORDER BY created DESC LIMIT 15')], 'nodes':db.execute('SELECT COUNT(*) FROM nodes').fetchone()[0]}
 
+STATIC=ROOT/'static'
+STATIC_NAME=re.compile(r'[a-z0-9_-]{1,40}\.(js|css)')
+STATIC_TYPES={'js':'text/javascript','css':'text/css'}   # send() appends '; charset=utf-8' and Cache-Control: no-store
+
+def static_file(name):
+    """(bytes, content type) for a UI asset in AXIS/static, or (None, None). Raw (undecoded) name must be a plain lowercase js/css file name."""
+    m=STATIC_NAME.fullmatch(name)
+    if not m: return None,None
+    try:
+        base=STATIC.resolve(strict=True)
+        path=(base/name).resolve(strict=True)
+    except (OSError,RuntimeError):
+        return None,None
+    if path.parent!=base or not path.is_file(): return None,None
+    return path.read_bytes(),STATIC_TYPES[m.group(1)]
+
 class Handler(BaseHTTPRequestHandler):
     def send(self,code,payload,ctype='application/json'):
         body=(json.dumps(payload,ensure_ascii=False).encode() if ctype=='application/json' else payload)
@@ -210,6 +226,9 @@ class Handler(BaseHTTPRequestHandler):
         if p.path=='/api/graph': return self.send(200,graph())
         if p.path=='/api/status': return self.send(200,status())
         if p.path=='/api/sources': return self.send(200,sources(urllib.parse.parse_qs(p.query).get('node',[''])[0]))
+        if p.path.startswith('/static/'):
+            body,ctype=static_file(p.path[len('/static/'):])
+            if body is not None: return self.send(200,body,ctype)
         self.send(404,{'error':'Not found'})
     def do_POST(self):
         self._axis_post=True

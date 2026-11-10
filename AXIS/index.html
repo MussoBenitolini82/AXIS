@@ -2,552 +2,270 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>AXIS Konsol</title>
+<title>AXIS</title>
 <script>
-/* Theme preference is applied before first paint. Storage may be unavailable; the page works without it. */
-(function(){try{var t=localStorage.getItem('axis-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}})();
+/* Theme before first paint. Preference: auto | dark | light; data-theme always holds the resolved theme. Storage may be unavailable. */
+(function(){var p='auto';try{p=localStorage.getItem('theme')||localStorage.getItem('axis-theme')||'auto'}catch(e){}
+if(p!=='dark'&&p!=='light')p=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+document.documentElement.setAttribute('data-theme',p)})();
 </script>
-<style>
-/* ===================== Tokens — dark first ===================== */
-:root{
-  color-scheme:dark;
-  --bg:#060a10;--surface:#0b121c;--surface-2:#101a27;--surface-3:#162334;
-  --line:#1d2b3d;--line-strong:#3b5068;
-  --text:#e4eef7;--text-muted:#9cb0c3;
-  --accent:#5fd4f4;--accent-strong:#9be6fb;--accent-contrast:#03121a;--accent-soft:rgba(95,212,244,.11);
-  --glow:0 0 0 1px rgba(95,212,244,.22),0 0 28px rgba(95,212,244,.10);
-  --focus:#9be6fb;
-  --ok:#74e2a8;--ok-bg:rgba(116,226,168,.10);
-  --warn:#f3cd72;--warn-bg:rgba(243,205,114,.11);
-  --fail:#ff9d91;--fail-bg:rgba(255,120,105,.12);
-  --notrun:#b7c3d1;--notrun-bg:rgba(183,195,209,.10);
-  --scene-bg:#040810;--scene-text:#dcecf8;--scene-muted:#a3bccf;--scene-panel:rgba(8,16,27,.82);
-  --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
-  --font-mono:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,monospace;
-  --r-sm:6px;--r:10px;--r-lg:14px;--pill:999px;
-  --header-h:56px;
-}
-@media (prefers-color-scheme:light){
-  :root:not([data-theme=dark]){
-    color-scheme:light;
-    --bg:#edf1f5;--surface:#ffffff;--surface-2:#f3f6f9;--surface-3:#e6ecf2;
-    --line:#d2dbe5;--line-strong:#8797a9;
-    --text:#0f1b27;--text-muted:#46566a;
-    --accent:#006b8a;--accent-strong:#00546d;--accent-contrast:#ffffff;--accent-soft:rgba(0,107,138,.08);
-    --glow:0 0 0 1px rgba(0,107,138,.18),0 2px 14px rgba(15,27,39,.06);
-    --focus:#006b8a;
-    --ok:#16653a;--ok-bg:#e6f5ec;--warn:#7a4c00;--warn-bg:#fff3d6;
-    --fail:#b42318;--fail-bg:#fdecea;--notrun:#4a5868;--notrun-bg:#e9eef3;
-  }
-}
-:root[data-theme=light]{
-  color-scheme:light;
-  --bg:#edf1f5;--surface:#ffffff;--surface-2:#f3f6f9;--surface-3:#e6ecf2;
-  --line:#d2dbe5;--line-strong:#8797a9;
-  --text:#0f1b27;--text-muted:#46566a;
-  --accent:#006b8a;--accent-strong:#00546d;--accent-contrast:#ffffff;--accent-soft:rgba(0,107,138,.08);
-  --glow:0 0 0 1px rgba(0,107,138,.18),0 2px 14px rgba(15,27,39,.06);
-  --focus:#006b8a;
-  --ok:#16653a;--ok-bg:#e6f5ec;--warn:#7a4c00;--warn-bg:#fff3d6;
-  --fail:#b42318;--fail-bg:#fdecea;--notrun:#4a5868;--notrun-bg:#e9eef3;
-}
-
-/* ===================== Base ===================== */
-*,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:1rem;line-height:1.5;min-width:0}
-h1,h2,h3{margin:0;line-height:1.25}
-p{margin:6px 0;color:var(--text-muted);font-size:.875rem}
-a{color:var(--accent)}
-code,.mono{font-family:var(--font-mono)}
-code{font-size:.85em;background:var(--surface-3);padding:1px 5px;border-radius:4px}
-:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-[hidden]{display:none!important}
-.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.skip-link{position:absolute;left:16px;top:-60px;z-index:20;background:var(--accent);color:var(--accent-contrast);padding:8px 16px;border-radius:var(--r);text-decoration:none;font-weight:600}
-.skip-link:focus{top:8px}
-
-/* ===================== Controls ===================== */
-input,select,textarea,button{font:inherit;font-size:.875rem}
-input:not([type=file]),select,textarea{width:100%;min-height:40px;padding:8px 12px;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r-sm)}
-textarea{font-family:var(--font-mono);resize:vertical;line-height:1.45}
-input[type=file]{width:100%;padding:8px;border:1px dashed var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text)}
-::placeholder{color:var(--text-muted);opacity:.9}
-select{width:auto;min-height:34px;padding:4px 8px}
-label,.field-label{display:block;font-size:.8125rem;font-weight:600;margin:12px 0 4px}
-button{cursor:pointer;min-height:38px;padding:7px 14px;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:transparent;color:var(--text);font-weight:600;line-height:1.2;transition:background-color .15s,border-color .15s,box-shadow .15s}
-button:hover{background:var(--accent-soft);border-color:var(--accent)}
-button:disabled{opacity:.5;cursor:wait}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-contrast)}
-button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
-.btn-approve{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
-.btn-danger{color:var(--fail);border-color:var(--fail);background:var(--fail-bg)}
-.btn-approve:hover,.btn-danger:hover{filter:brightness(1.1)}
-.ghost{border-color:var(--line);background:transparent}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.field-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:0 12px}
-
-/* ===================== Top bar ===================== */
-.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;min-height:var(--header-h);padding:8px 20px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
-.brand-mark{width:30px;height:30px;color:var(--accent);flex:none}
-.brand-mark .orbit{transform-origin:16px 16px;animation:spin 24s linear infinite}
-.brand-name{font-weight:700;letter-spacing:.32em;font-size:1rem}
-.brand-sub{font-size:.75rem;color:var(--text-muted);display:block;letter-spacing:.02em}
-.conn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted);padding:4px 10px;border:1px solid var(--line);border-radius:var(--pill)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--notrun);flex:none}
-[data-state=ok] > .dot,.conn[data-state=ok] .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-[data-state=warn] > .dot{background:var(--warn)}
-[data-state=fail] > .dot,.conn[data-state=fail] .dot{background:var(--fail)}
-.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.top-actions button{min-height:34px;padding:5px 12px;font-size:.8125rem}
-.badge{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:var(--pill);background:var(--warn-bg);color:var(--warn);font-family:var(--font-mono);font-size:.75rem;text-align:center}
-.badge:empty,.badge[data-n="0"]{display:none}
-
-/* ===================== Console layout ===================== */
-/* ----- Tabs ----- */
-.tabs{position:sticky;top:var(--header-h);z-index:4;display:flex;gap:2px;padding:0 20px;overflow-x:auto;scrollbar-width:none;background:var(--bg);border-bottom:1px solid var(--line)}
-.tabs::-webkit-scrollbar{display:none}
-.tabs [role=tab]{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--text-muted);font-weight:600;white-space:nowrap}
-.tabs [role=tab]:hover{background:transparent;color:var(--text)}
-.tabs [role=tab][aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
-.tabs .badge{margin-left:0}
-.tab-dot{width:7px;height:7px;border-radius:50%;background:transparent}
-.tab-dot[data-state=fail]{background:var(--fail)}.tab-dot[data-state=warn]{background:var(--warn)}
-.page{max-width:1280px;margin:0 auto;padding:20px 20px 40px;min-height:calc(100vh - var(--header-h) - 46px)}
-.panel{display:flex;flex-direction:column;gap:14px;min-width:0}
-.panel:focus-visible{outline:none}
-.panel.narrow{max-width:820px}
-.stage{display:flex;flex-direction:column;gap:12px;min-width:0}
-.node-box{font-size:.875rem}
-.node-box > summary{cursor:pointer;color:var(--text-muted);font-size:.8125rem}
-/* ----- Answer panel ----- */
-.answer{padding:16px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:var(--r);min-width:0}
-.answer[data-state=failed]{border-left-color:var(--fail);background:var(--fail-bg)}
-.answer[data-state=local]{border-left-color:var(--warn)}
-.answer-q{margin:0 0 8px;color:var(--text-muted);font-size:.875rem;overflow-wrap:anywhere}
-.answer-q::before{content:"Soru: ";font-weight:700}
-.answer-state{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:.8125rem;color:var(--warn)}
-.answer-state:empty,.answer-state[hidden]{display:none}
-.answer[data-state=failed] .answer-state{color:var(--fail);font-weight:700}
-.spinner{width:14px;height:14px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
-.answer-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:1rem;line-height:1.6;color:var(--text)}
-.answer-text:empty{display:none}
-.answer-meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:12px;font-size:.75rem;color:var(--text-muted)}
-.answer-meta:empty{display:none}
-.answer-meta button{min-height:28px;padding:2px 10px;border-radius:var(--pill);border-color:var(--line);font-size:.75rem;font-weight:500}
-.pill{display:inline-block;padding:2px 9px;border-radius:var(--pill);background:var(--surface-3);font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}
-.pill[data-state=ok]{background:var(--ok-bg);color:var(--ok)}.pill[data-state=warn]{background:var(--warn-bg);color:var(--warn)}.pill[data-state=fail]{background:var(--fail-bg);color:var(--fail);font-weight:700}
-.history ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.history li{padding:8px 0;border-bottom:1px solid var(--line);font-size:.875rem;overflow-wrap:anywhere}
-.history li[data-state=failed] .h-a{color:var(--fail)}
-.h-q{font-weight:600;color:var(--text)}.h-a{color:var(--text-muted);white-space:pre-wrap;margin-top:2px}
-.auto-line{display:flex;align-items:center;gap:8px;margin:0}
-.hint{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid var(--line-strong);border-radius:50%;font-size:.75rem;color:var(--text-muted);cursor:help}
-.restart{margin:0;padding:6px 10px;border-radius:var(--r-sm);background:var(--warn-bg);color:var(--warn);font-size:.8125rem;font-weight:600}
-.core{display:flex;flex-direction:column;gap:12px;min-width:0}
-.core-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
-.seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
-.seg button{min-height:32px;padding:4px 12px;border:0;border-radius:7px;font-size:.8125rem;color:var(--text-muted)}
-.seg button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
-.xor{display:inline-flex;align-items:center;gap:8px;margin:0;padding:3px 10px;border:1px solid var(--line);border-radius:var(--r);font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}
-.xor label{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:.75rem}
-.xor-pairs{display:inline-flex;gap:3px}
-.xor-pairs button{min-height:32px;min-width:44px;padding:3px 8px;font-family:var(--font-mono);font-size:.8125rem;border-color:var(--line)}
-.xor-pairs button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-contrast)}
-.readout{position:absolute;top:42px;right:16px;width:min(270px,calc(100% - 32px));padding:10px 12px;background:var(--scene-panel);border:1px solid rgba(95,212,244,.35);border-radius:var(--r-sm);color:var(--scene-text);font-family:var(--font-mono);font-size:.75rem;pointer-events:none}
-.ro-eq{color:var(--scene-muted);letter-spacing:.08em}
-.ro-out{display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:baseline;margin:4px 0}
-.ro-k{color:var(--scene-muted);font-size:.6875rem;text-transform:uppercase;letter-spacing:.08em}
-.ro-big{font-size:1.25rem;color:#9be6fb;font-weight:600}
-.ro-meta{color:var(--scene-muted);overflow-wrap:anywhere}
-.ro-flag:empty{display:none}
-.ro-flag{margin-top:6px;padding:3px 8px;border-radius:var(--pill);font-weight:700;font-family:var(--font-ui);display:inline-block}
-.readout[data-state=ok] .ro-flag{background:rgba(116,226,168,.14);color:#74e2a8}
-.readout[data-state=fail]{border:2px solid #ff9d91}
-.readout[data-state=fail] .ro-flag{background:rgba(255,120,105,.18);color:#ffb4ab}
-.readout[data-state=fail] .ro-big{color:#ffb4ab}
-.view-tools{margin-left:auto;display:flex;gap:6px}
-.view-tools button{min-height:32px;padding:4px 10px;font-size:.8125rem}
-
-/* ----- The core scene (hero) ----- */
-.scene{position:relative;flex:1 1 auto;min-height:420px;height:calc(100vh - var(--header-h) - 200px);max-height:900px;overflow:hidden;border-radius:var(--r-lg);background:var(--scene-bg);border:1px solid rgba(95,212,244,.22);box-shadow:var(--glow)}
-.scene::before,.scene::after{content:"";position:absolute;width:28px;height:28px;pointer-events:none;border:1px solid rgba(155,230,251,.55)}
-.scene::before{top:10px;left:10px;border-right:0;border-bottom:0}
-.scene::after{bottom:10px;right:10px;border-left:0;border-top:0}
-#c{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
-#c:active{cursor:grabbing}
-#c:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}
-#axis-v13-graph{width:100%;height:100%;display:block}
-.hud{position:absolute;top:16px;left:48px;right:16px;display:flex;gap:6px 16px;flex-wrap:wrap;align-items:baseline;pointer-events:none;color:var(--scene-muted);font-family:var(--font-mono);font-size:.75rem}
-.hud-mode{color:var(--scene-text);letter-spacing:.18em;text-transform:uppercase;font-weight:600}
-.hud-note{color:#f3cd72}
-.legend{position:absolute;bottom:14px;left:14px;max-width:calc(100% - 28px);display:flex;flex-wrap:wrap;gap:4px 14px;padding:6px 12px;background:var(--scene-panel);border:1px solid rgba(163,188,207,.18);border-radius:var(--r-sm);color:var(--scene-text);font-size:.75rem}
-.swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
-.tip{position:absolute;bottom:16px;right:48px;color:var(--scene-muted);font-size:.75rem;pointer-events:none;text-align:right}
-
-/* ----- Command bar ----- */
-.cmd{display:flex;flex-direction:column;gap:6px}
-.cmd-label{margin:0;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);font-weight:600}
-.cmd-row{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 14px;border:1px solid var(--line-strong);border-radius:var(--r);background:var(--surface);transition:box-shadow .15s,border-color .15s}
-.cmd-row:focus-within{border-color:var(--accent);box-shadow:var(--glow)}
-.cmd-prompt{font-family:var(--font-mono);color:var(--accent);font-size:1.1rem;flex:none}
-#cmdInput{flex:1 1 auto;min-width:0;border:0;background:transparent;font-size:1rem;padding:6px 4px;min-height:40px}
-#cmdInput:focus-visible{outline:none}
-.cmd-row button{flex:none}
-.intent{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;min-height:22px;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}
-.intent b{color:var(--accent);font-weight:600}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{min-height:30px;padding:3px 10px;border-radius:var(--pill);border-color:var(--line);font-family:var(--font-mono);font-size:.75rem;font-weight:500;color:var(--text-muted)}
-
-/* ===================== Rail ===================== */
-.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;min-width:0}
-.card-head{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
-.card-head h2{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);font-weight:700}
-.card-head .meta{margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)}
-.status-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
-.st{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border:1px solid transparent;border-radius:var(--r-sm);background:var(--surface);min-width:0}
-.st-k{display:flex;align-items:center;gap:6px;font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
-.st-val{font-family:var(--font-mono);font-size:.8125rem;color:var(--text);overflow-wrap:anywhere}
-.st-note{font-size:.6875rem;color:var(--text-muted);overflow-wrap:anywhere}
-.st-note:empty{display:none}
-.st[data-state=ok] .st-val{color:var(--ok)}
-.st[data-state=warn]{border-color:var(--warn)} .st[data-state=warn] .st-val{color:var(--warn)}
-.st[data-state=fail]{border-color:var(--fail);background:var(--fail-bg)} .st[data-state=fail] .st-val{color:var(--fail)}
-.st[data-state=notrun] .st-val{color:var(--notrun)}
-.st .dot{width:7px;height:7px}
-.st[data-state=ok] .dot{background:var(--ok)}.st[data-state=warn] .dot{background:var(--warn)}.st[data-state=fail] .dot{background:var(--fail)}
-.st.wide{grid-column:1/-1}
-.auto-note{margin:8px 0 0;font-size:.6875rem;font-family:var(--font-mono);color:var(--text-muted)}
-
-/* ----- Approval cards & item rows ----- */
-.gate-note{font-size:.75rem;color:var(--text-muted);margin:0 0 8px}
-.empty{font-size:.8125rem;color:var(--text-muted);padding:4px 0;margin:0}
-.item{margin:6px 0;padding:10px 12px;border:0;border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface);overflow-wrap:anywhere}
-.item-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
-.item-status{margin-left:auto;font-family:var(--font-mono);text-transform:none;letter-spacing:0;padding:1px 7px;border-radius:var(--pill);background:var(--surface-3)}
-.item-title{margin:4px 0 0;color:var(--text);font-weight:600;font-size:.875rem}
-.item-meta{margin:2px 0 0;font-size:.8125rem}
-.item-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.item-actions:empty{display:none}
-.item-actions button{min-height:32px;padding:4px 10px;font-size:.8125rem}
-[data-status=pending],[data-status=running],[data-status=awaiting_tests_and_approval]{border-left-color:var(--warn)}
-[data-status=pending] .item-status{background:var(--warn-bg);color:var(--warn)}
-[data-status=completed],[data-status=approved],[data-status=applied],[data-status=success]{border-left-color:var(--ok)}
-[data-status=failed],[data-status=failure],[data-status=review_failed]{border-left-color:var(--fail);background:var(--fail-bg)}
-[data-status=rejected],[data-status=rolled_back]{border-left-color:var(--notrun)}
-
-/* ----- Activity feed ----- */
-.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:420px;overflow:auto}
-.feed li{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:baseline;font-size:.8125rem;padding:4px 0;border-bottom:1px solid var(--line)}
-.feed time{font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)}
-.feed .fdot{width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translateY(-1px)}
-.feed [data-state=ok] .fdot{background:var(--ok)}.feed [data-state=warn] .fdot{background:var(--warn)}.feed [data-state=fail] .fdot{background:var(--fail)}.feed [data-state=notrun] .fdot{background:var(--notrun)}
-.feed [data-state=fail] .ftext{color:var(--fail)}
-.ftext{overflow-wrap:anywhere}
-#msg{font-size:.8125rem;color:var(--accent);min-height:1.2em;margin:0 0 6px}
-#jobs{display:flex;flex-direction:column;gap:4px}
-.job{font-size:.8125rem;padding:5px 10px;border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface);overflow-wrap:anywhere}
-.job[data-status=running]{background:var(--warn-bg);color:var(--warn)}
-.job[data-status=failed]{color:var(--fail)}
-.sub-h{font-size:.6875rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:12px 0 6px;font-weight:700}
-
-/* ----- Details (selected node) ----- */
-#details{font-size:.875rem;overflow-wrap:anywhere}
-#details strong{display:block;color:var(--text)}
-.source{padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-sm);margin:6px 0;background:var(--surface-2)}
-.source a{font-weight:600}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 0 0;font-size:.8125rem}
-.kv dt{color:var(--text-muted)} .kv dd{margin:0;font-family:var(--font-mono);overflow-wrap:anywhere}
-table.xor-table{border-collapse:collapse;margin-top:8px;font-family:var(--font-mono);font-size:.75rem;width:100%}
-.xor-table th,.xor-table td{border-bottom:1px solid var(--line);padding:3px 6px;text-align:left}
-.xor-table th{color:var(--text-muted);font-weight:600}
-
-/* ----- Console output ----- */
-pre.console{position:relative;font-family:var(--font-mono);font-size:.78rem;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;margin:10px 0 0;padding:10px 12px;background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:var(--r-sm)}
-pre.console:empty{display:none}
-pre.console[data-alert]{border-width:2px;padding-top:34px}
-pre.console[data-alert]::before{position:absolute;top:8px;left:10px;font-family:var(--font-ui);font-size:.6875rem;font-weight:700;padding:2px 8px;border-radius:var(--pill)}
-pre.console[data-alert=fail]{border-color:var(--fail)}
-pre.console[data-alert=fail]::before{content:"✕ FAILED / hata içeriyor";background:var(--fail-bg);color:var(--fail)}
-pre.console[data-alert=notrun]{border-color:var(--notrun)}
-pre.console[data-alert=notrun]::before{content:"○ NOT RUN içeriyor";background:var(--notrun-bg);color:var(--notrun)}
-details.out > summary{cursor:pointer;font-size:.75rem;color:var(--text-muted);margin-top:8px}
-
-/* ===================== Araçlar ===================== */
-details.tool{border-bottom:1px solid var(--line);margin:0}
-details.tool > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:14px 4px;font-weight:600;font-size:.9375rem}
-details.tool > summary::-webkit-details-marker{display:none}
-details.tool > summary::before{content:"";width:7px;height:7px;border-right:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);transform:rotate(-45deg);transition:transform .15s;flex:none}
-details.tool[open] > summary::before{transform:rotate(45deg)}
-details.tool > summary .tag{margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--accent);border:1px solid var(--line);padding:1px 7px;border-radius:var(--pill);font-weight:500}
-.tool-body{padding:0 4px 18px}
-.tool-body h3{font-size:.6875rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:16px 0 4px}
-
-/* ===================== Responsive ===================== */
-@media (max-width:1080px){
-  .scene{height:62vh;min-height:340px}
-}
-@media (max-width:560px){
-  .topbar{padding:8px 16px}
-  .tabs{padding:0 8px}
-  .tabs [role=tab]{padding:8px 10px}
-  .page{padding:14px 16px 28px}
-  .tip{display:none}
-  .hud{left:16px;top:12px}
-  /* phone: overlays move below the canvas so they never cover the network */
-  .scene{height:auto;min-height:0;max-height:none;display:flex;flex-direction:column}
-  #c{height:340px;flex:none}
-  #axis-v13-graph{height:300px;flex:none}
-  .readout,.legend{position:static;width:auto;max-width:none;margin:0 10px 10px}
-  .scene::after{display:none}
-  .xor label{display:none}
-  .view-tools{margin-left:0}
-  .status-list{grid-template-columns:1fr 1fr}
-  .actions button{flex:1 1 100%}
-  .cmd-row{padding-left:10px}
-  .top-actions button{padding:5px 8px}
-  .topbar{flex-wrap:nowrap;gap:8px}
-  .brand-name{letter-spacing:.2em}
-  .conn{padding:4px 8px;white-space:nowrap}
-  .top-actions button{white-space:nowrap}
-  #connText{font-size:.6875rem}
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
-}
-@media (forced-colors:active){
-  .item,.job{border-left-width:4px}
-  button{border:1px solid ButtonText}
-  .dot,.fdot{forced-color-adjust:none}
-}
-</style>
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<a class="skip-link" href="#cmdInput">Komut satırına geç</a>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4A8 8 0 1 1 20 12z"/><path d="M9 11h6M9 14h3.5"/></symbol>
+  <symbol id="i-neural" viewBox="0 0 24 24"><circle cx="5" cy="7" r="2"/><circle cx="5" cy="17" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 7l3.2-1.6M7 7l3 4M7 17l3-4M7 17l3.2 1.6M14 5.6l3.2 5M14 12h3M14 18.4l3.2-5"/></symbol>
+  <symbol id="i-updates" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 20v-4h-4"/></symbol>
+  <symbol id="i-system" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 12l2.5-3 2.5 2 3-4"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L20 12l-8 8a2.1 2.1 0 0 1-3-3l8-8z"/><path d="M14.5 6.5l1.8-1.8a4 4 0 0 1 3 3L17.5 9.5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10.5 13.5"/><path d="M21 3l-6.5 18-4-7.5L3 9.5z"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-side" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M13 10l2 2-2 2"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+</svg>
+<a class="skip" href="#main">İçeriğe geç</a>
 
-<header class="topbar">
-  <div class="brand">
-    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="16" cy="16" r="14" opacity=".25"/><g class="orbit"><circle cx="16" cy="16" r="10" stroke-dasharray="3 5" opacity=".7"/></g><circle cx="16" cy="16" r="3.4" fill="currentColor"/><circle cx="7" cy="9" r="1.8"/><circle cx="25" cy="9" r="1.8"/><circle cx="16" cy="28" r="1.8"/><path d="M8.5 10.2l5 3.6M23.5 10.2l-5 3.6M16 19.6v6.6" opacity=".7"/></g></svg>
-    <span class="brand-name">AXIS</span>
-  </div>
-  <div class="conn" id="conn" data-state="unknown" role="status"><span class="dot" aria-hidden="true"></span><span id="connText">Bağlanıyor…</span></div>
-  <div class="top-actions">
-    <button type="button" id="themeBtn" class="ghost" title="Tema">◐ Otomatik</button>
-  </div>
-</header>
-
-<nav class="tabs" role="tablist" aria-label="Bölümler" id="tabs">
-  <button type="button" role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="true" data-tab="chat">Sohbet</button>
-  <button type="button" role="tab" id="tab-neural" aria-controls="panel-neural" aria-selected="false" tabindex="-1" data-tab="neural">Sinir ağı</button>
-  <button type="button" role="tab" id="tab-memory" aria-controls="panel-memory" aria-selected="false" tabindex="-1" data-tab="memory">Bellek</button>
-  <button type="button" role="tab" id="tab-updates" aria-controls="panel-updates" aria-selected="false" tabindex="-1" data-tab="updates">Güncellemeler<span class="badge" id="apprCount" data-n="0"></span></button>
-  <button type="button" role="tab" id="tab-system" aria-controls="panel-system" aria-selected="false" tabindex="-1" data-tab="system">Sistem<span class="tab-dot" id="sysDot" data-state="unknown" aria-hidden="true"></span></button>
-  <button type="button" role="tab" id="tab-tools" aria-controls="panel-tools" aria-selected="false" tabindex="-1" data-tab="tools">Araçlar</button>
-</nav>
-
-<main id="main" class="page">
-  <h1 class="visually-hidden">AXIS</h1>
-
-  <!-- ============ Sohbet ============ -->
-  <section class="panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" tabindex="0">
-    <form id="cmd" class="cmd" autocomplete="off">
-      <label class="cmd-label" for="cmdInput">Sor ya da komut ver</label>
-      <div class="cmd-row">
-        <span class="cmd-prompt" aria-hidden="true">›</span>
-        <input id="cmdInput" name="cmd" placeholder="Örn. Bellekte neler var? · araştır yapay sinir ağları" aria-describedby="intent cmdHelp" enterkeyhint="go" maxlength="2000">
-        <button type="submit" class="primary" id="cmdGo">Gönder</button>
-      </div>
-      <div class="intent" id="intent" aria-live="polite"><b id="intentName">—</b><span id="intentPath"></span></div>
-      <p id="cmdHelp" class="visually-hidden">Soru yaz ve Enter'a bas; yerel model yanıtlar. Literatür araması için «araştır konu» (varsayılan 50 kayıt) ya da «araştır 100 konu». AXIS komut satırından hiçbir şey uygulamaz veya onaylamaz.</p>
-      <div class="chips" aria-label="Hızlı komutlar">
-        <button type="button" data-cmd="Bellekte neler var?">Bellekte neler var?</button>
-        <button type="button" data-cmd="araştır " data-fill="1" title="Kayıt sayısı için: araştır 100 konu (varsayılan 50)">araştır 50 konu</button>
-        <button type="button" data-cmd="hafızada ara " data-fill="1">hafızada ara …</button>
-        <button type="button" data-cmd="durum">durum</button>
-        <button type="button" data-cmd="yardım" title="Tüm komutlar">?</button>
-      </div>
-    </form>
-
-    <section class="answer" id="answer" aria-live="polite" aria-labelledby="answerQ" hidden>
-      <p class="answer-q" id="answerQ"></p>
-      <div class="answer-state" id="answerState"><span class="spinner" aria-hidden="true"></span><span id="answerWait"></span></div>
-      <div class="answer-text" id="answerText"></div>
-      <div class="answer-meta" id="answerMeta"></div>
-    </section>
-    <section class="history" aria-labelledby="hHist" id="historyWrap" hidden>
-      <h2 class="sub-h" id="hHist">Önceki sorular</h2>
-      <ol id="askHistory"></ol>
-    </section>
-  </section>
-
-  <!-- ============ Sinir ağı (stage lives here by default; moved to Bellek when that tab opens) ============ -->
-  <section class="panel" id="panel-neural" role="tabpanel" aria-labelledby="tab-neural" tabindex="0" hidden>
-    <div class="stage-slot" id="slot-neural">
-      <div id="stage" class="stage">
-        <div class="core-head">
-          <div class="seg" id="memSeg" role="group" aria-label="Görünüm">
-            <button type="button" data-mode="neural" aria-pressed="true" hidden>Sinir ağı</button>
-            <button type="button" data-mode="knowledge" aria-pressed="false">Bilgi ağı</button>
-            <button type="button" data-mode="skills" aria-pressed="false">Beceri ağı</button>
-            <button type="button" data-mode="learning" aria-pressed="false">Öğrenme</button>
-          </div>
-          <fieldset class="xor" id="xorBox"><legend class="visually-hidden">XOR girdileri</legend><span aria-hidden="true">Girdi</span>
-            <span class="xor-pairs" role="group" aria-label="Hazır girdi çiftleri (a, b)">
-              <button type="button" data-xor="0,0" aria-pressed="false" aria-label="a=0, b=0">0 0</button><button type="button" data-xor="0,1" aria-pressed="false" aria-label="a=0, b=1">0 1</button><button type="button" data-xor="1,0" aria-pressed="true" aria-label="a=1, b=0">1 0</button><button type="button" data-xor="1,1" aria-pressed="false" aria-label="a=1, b=1">1 1</button>
-            </span>
-            <label for="xorA">a <select id="xorA"><option value="0">0</option><option value="1" selected>1</option></select></label>
-            <label for="xorB">b <select id="xorB"><option value="0" selected>0</option><option value="1">1</option></select></label>
-          </fieldset>
-          <div class="view-tools">
-            <button type="button" id="home" class="ghost" title="Görünümü sıfırla">Sıfırla</button>
-            <button type="button" id="rotate" class="ghost" aria-pressed="false">Döndür: Kapalı</button>
-          </div>
-        </div>
-        <div id="scene" class="scene">
-          <canvas id="c" tabindex="0" role="img" aria-label="AXIS 3B görünüm. Ok tuşları: döndür, artı/eksi: yakınlaştır. Düğüm seçmek için tıkla.">Tarayıcın canvas desteklemiyor.</canvas>
-          <svg id="axis-v13-graph" viewBox="0 0 700 290" role="img" aria-label="Öğrenme ağı (2B): ajanlar, görevler ve dersler" hidden></svg>
-          <div class="hud"><span class="hud-mode" id="modeTitle">Sinir ağı · XOR</span><span id="counts" aria-live="polite">Yükleniyor…</span><span id="axis-v13-summary" hidden></span><span class="hud-note" id="hudNote"></span></div>
-          <div class="readout" id="neuralReadout" data-state="unknown" aria-live="polite">
-            <div class="ro-eq"><span id="roEq">a ⊕ b</span></div>
-            <div class="ro-out"><span class="ro-k">Tahmin</span><span id="roPred" class="ro-big">—</span><span class="ro-k">Beklenen</span><span id="roExp" class="ro-big">—</span></div>
-            <div class="ro-meta" id="roMeta">Yükleniyor…</div>
-            <div class="ro-flag" id="roFlag"></div>
-          </div>
-          <div class="legend" id="legend" aria-label="Lejant"></div>
-          <div class="tip" id="tip">Sürükle: döndür · Tekerlek: yakınlaştır · Tıkla: ayrıntı</div>
-        </div>
-        <details class="node-box" id="nodeBox"><summary>Seçilen düğüm</summary><div id="details" aria-live="polite"><p>Bir düğüme tıkla.</p></div></details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ Bellek ============ -->
-  <section class="panel" id="panel-memory" role="tabpanel" aria-labelledby="tab-memory" tabindex="0" hidden>
-    <div class="stage-slot" id="slot-memory"></div>
-    <h2 class="sub-h">Son araştırmalar</h2>
-    <div id="jobs"></div>
-  </section>
-
-  <!-- ============ Güncellemeler ============ -->
-  <section class="panel narrow" id="panel-updates" role="tabpanel" aria-labelledby="tab-updates" tabindex="0" hidden>
-    <div id="approvals" tabindex="-1">
-      <p class="auto-line"><span class="pill" id="autoMode" data-state="unknown">Otomatik güncelleme: —</span>
-        <span class="hint" title="Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa uygulanır. Korunan dosyalar: vector_upgrade.py, local_models.py, server.py, axis_sqlite.py, test_*.py. Kapatmak için sunucuyu AXIS_AUTO_APPLY=0 ile başlat.">?</span></p>
-      <p class="gate-note">Docker testi PASS olmadan hiçbir çekirdek güncelleme uygulanmaz. Diğer öneriler senin onayını bekler.</p>
-      <p class="restart" id="restartNote" hidden>Yeniden başlatma gerekli: değişiklik sunucu yeniden başlatılınca etkin olur.</p>
-      <h2 class="sub-h">Son otomatik güncellemeler</h2>
-      <div id="apAuto"><p class="empty">Henüz otomatik güncelleme yok.</p></div>
-      <h2 class="sub-h">Bekleyen</h2>
-      <p class="empty" id="apprEmpty">Onay bekleyen öneri yok.</p>
-      <div id="apUpgrade"></div><div id="apSkill"></div><div id="apAgent"></div><div id="apBrain"></div>
-      <pre id="updOut" class="console" aria-live="polite"></pre>
-    </div>
-  </section>
-
-  <!-- ============ Sistem ============ -->
-  <section class="panel narrow" id="panel-system" role="tabpanel" aria-labelledby="tab-system" tabindex="0" hidden>
-    <ul class="status-list" id="statusRail">
-      <li class="st" id="st-server" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sunucu</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-ollama" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ollama</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-model" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Model</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
-      <li class="st" id="st-autoupd" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Otomatik güncelleme</span><span class="st-val">—</span><span class="st-note"></span></li>
+<div class="shell" id="shell">
+  <nav class="rail" aria-label="Bölümler">
+    <div class="brand" aria-hidden="true"><svg viewBox="0 0 32 32"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="16" cy="16" r="13" opacity=".3"/><circle cx="16" cy="16" r="3.4" fill="currentColor"/><circle cx="7" cy="9" r="1.8"/><circle cx="25" cy="9" r="1.8"/><circle cx="16" cy="27" r="1.8"/><path d="M8.5 10.2l5 3.6M23.5 10.2l-5 3.6M16 19.6v5.6" opacity=".75"/></g></svg><span class="brand-name">AXIS</span></div>
+    <ul class="rail-list" id="rail">
+      <li><button type="button" class="rail-btn" data-tab="chat" data-tip="Sohbet (Ctrl+1)" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><span class="rail-label">Sohbet</span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="ag" data-tip="Ağ (Ctrl+2)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-neural"/></svg><span class="rail-label">Ağ</span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="updates" data-tip="Güncellemeler (Ctrl+3)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-updates"/></svg><span class="rail-label">Güncellemeler</span><span class="badge" id="apprCount" data-n="0"></span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="system" data-tip="Sistem (Ctrl+4)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-system"/></svg><span class="rail-label">Sistem</span><span class="sdot" id="sysDot" data-state="unknown" aria-hidden="true"></span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="tools" data-tip="Araçlar (Ctrl+5)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-tools"/></svg><span class="rail-label">Araçlar</span></button></li>
+      <li aria-hidden="true" class="rail-ind-li"><span class="rail-ind" id="railInd"></span></li>
     </ul>
-    <p class="auto-note">Yenileme: <span id="pollState">açık</span> · <span id="stamp">—</span></p>
-    <h2 class="sub-h">Etkinlik</h2>
-    <p id="msg" role="status" aria-live="polite"></p>
-    <ol class="feed" id="feed" aria-label="Etkinlik akışı"></ol>
-    <details class="out" id="cmdOutWrap"><summary>Son ham çıktı</summary><pre id="cmdOut" class="console" aria-live="polite"></pre></details>
-  </section>
+    <div class="rail-foot">
+      <button type="button" class="rail-btn" id="railToggle" data-tip="Menüyü genişlet" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-side"/></svg><span class="rail-label">Daralt</span></button>
+    </div>
+  </nav>
 
-  <!-- ============ Araçlar (former Gelişmiş drawer) ============ -->
-  <section class="panel narrow" id="panel-tools" role="tabpanel" aria-labelledby="tab-tools" tabindex="0" hidden>
-    <p class="gate-note">Bu araçlar dosya yazabilir; hiçbiri kendiliğinden çalışmaz.</p>
-
-    <details class="tool" id="panel-v4">
-      <summary>Araştırma</summary>
-      <div class="tool-body">
-        <label for="v4topic">Sentez konusu</label><input id="v4topic" placeholder="Daha önce araştırdığın konu">
-        <div class="actions"><button type="button" data-act="v4synth">Literatür sentezi</button></div>
-        <label for="v4pdf">PDF ekle</label><input type="file" id="v4pdf" accept=".pdf,application/pdf">
-        <div class="actions"><button type="button" data-act="v4upload">PDF'i bilgi ağına ekle</button></div>
-        <label for="v4query">Hafızada ara</label><input id="v4query" placeholder="Kavram">
-        <div class="actions"><button type="button" data-act="v4parallel">3 aracı paralel çalıştır</button></div>
-        <pre id="v4out" class="console" aria-live="polite"></pre>
+  <div class="main">
+    <header class="topbar">
+      <h1 id="viewTitle">Sohbet</h1>
+      <div class="top-right">
+        <div class="conn" id="conn" data-state="unknown" role="status" title="Sunucu bağlantısı"><span class="dot" aria-hidden="true"></span><span id="connText">Bağlanıyor…</span></div>
+        <button type="button" class="ghost icon" id="themeBtn" aria-label="Tema: Otomatik" title="Tema: Otomatik"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
+        <details class="help"><summary aria-label="Klavye kısayolları" title="Kısayollar">?</summary>
+          <div class="help-pop"><dl>
+            <dt>Ctrl+1…5</dt><dd>Bölüm değiştir (Alt+1…5 da olur)</dd>
+            <dt>/</dt><dd>Sohbette yazmaya başla; Ağ'da düğüm ara</dd>
+            <dt>Enter</dt><dd>Gönder · Shift+Enter yeni satır</dd>
+            <dt>Esc</dt><dd>Paneli kapat</dd>
+            <dt>Oklar</dt><dd>Menüde gezin</dd>
+          </dl></div>
+        </details>
       </div>
-    </details>
+    </header>
 
-    <details class="tool" id="panel-evolution">
-      <summary>Beceri dosyaları</summary>
-      <div class="tool-body">
-        <div class="field-row"><div><label for="v4skill">Beceri adı (LLM)</label><input id="v4skill" placeholder="sayi_ozetle"></div><div><label for="v4desc">Ne yapsın?</label><input id="v4desc" placeholder="Açıklama"></div></div>
-        <div class="actions"><button type="button" data-act="v4generate">LLM ile kod öner</button></div>
-        <label for="skillName">Beceri adı</label><input id="skillName" placeholder="hesapla">
-        <label for="skillCode">Python kodu</label><textarea id="skillCode" rows="5" placeholder="def run(data):&#10;    return data"></textarea>
-        <label for="skillSummary">Açıklama</label><input id="skillSummary" placeholder="Değişiklik açıklaması">
-        <div class="actions"><button type="button" class="primary" data-act="proposeSkill">Öner</button><button type="button" data-act="refreshProposals">Yenile</button></div>
-        <pre id="evolutionOutput" class="console" aria-live="polite"></pre>
-        <div id="proposals"></div>
-      </div>
-    </details>
+    <main id="main" class="view" tabindex="-1">
+      <!-- ============ Sohbet ============ -->
+      <section class="panel chat" id="panel-chat" aria-labelledby="viewTitle">
+        <div class="chat-log" id="chatLog">
+          <div class="chat-empty" id="chatEmpty">
+            <svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>
+            <h2>Ne sormak istersin?</h2>
+            <p class="note">Yerel model belleği kullanarak yanıtlar.</p>
+          </div>
+          <section class="history" aria-labelledby="hHist" id="historyWrap" hidden>
+            <h2 class="sub-h" id="hHist">Önceki sorular</h2>
+            <ol id="askHistory"></ol>
+          </section>
+          <section class="answer" id="answer" aria-live="polite" aria-labelledby="answerQ" hidden>
+            <p class="answer-q" id="answerQ"></p>
+            <div class="answer-state" id="answerState"><span class="spinner" aria-hidden="true"></span><span id="answerWait"></span></div>
+            <div class="answer-text" id="answerText"></div>
+            <div class="answer-meta" id="answerMeta"></div>
+          </section>
+        </div>
+        <form id="cmd" class="composer" autocomplete="off">
+          <label class="vh" for="cmdInput">Sor ya da komut ver</label>
+          <div class="composer-row">
+            <textarea id="cmdInput" name="cmd" rows="1" placeholder="Sor ya da komut ver…" aria-describedby="intent cmdHelp" enterkeyhint="send" maxlength="2000"></textarea>
+            <button type="submit" class="primary" id="cmdGo" aria-label="Gönder" title="Gönder (Enter)"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></button>
+          </div>
+          <div class="intent" id="intent" aria-live="polite"><b id="intentName">—</b><span id="intentPath"></span></div>
+          <p id="cmdHelp" class="vh">Soru yaz ve Enter'a bas; yerel model yanıtlar. Literatür araması için «araştır konu» (varsayılan 50 kayıt) ya da «araştır 100 konu». AXIS komut satırından hiçbir şey uygulamaz veya onaylamaz.</p>
+          <div class="chips" aria-label="Hızlı komutlar">
+            <button type="button" data-cmd="Bellekte neler var?">Bellekte neler var?</button>
+            <button type="button" data-cmd="araştır " data-fill="1" title="Kayıt sayısı için: araştır 100 konu (varsayılan 50)">araştır…</button>
+            <button type="button" data-cmd="hafızada ara " data-fill="1" title="Bellekte etiket araması">hafızada ara…</button>
+            <button type="button" data-cmd="durum" title="Sistem durumu">durum</button>
+            <button type="button" data-cmd="yardım" title="Tüm komutlar" aria-label="Yardım">?</button>
+          </div>
+        </form>
+      </section>
 
-    <details class="tool" id="panel-v5">
-      <summary>Çekirdek güncellemeler</summary>
-      <div class="tool-body">
-        <label for="v5target">Hedef modül</label><input id="v5target" value="research_extensions.py" placeholder="modul.py" title="AXIS üst düzey .py; korunan dosyalar ve test_*.py hariç">
-        <label for="v5code">Python kodu</label><textarea id="v5code" rows="7" placeholder="Önerilen kod"></textarea>
-        <label for="v5desc">Açıklama</label><input id="v5desc" placeholder="Değişiklik açıklaması">
-        <div class="actions"><button type="button" class="primary" data-act="v5propose">Öner (PASS ise otomatik uygulanır)</button><button type="button" data-act="v5list">Yenile</button></div>
-        <pre id="v5out" class="console" aria-live="polite"></pre>
-        <div id="v5items"></div>
-      </div>
-    </details>
+      <!-- ============ Ağ (unified network: former Sinir ağı + Bellek) ============ -->
+      <section class="panel wide" id="panel-ag" aria-labelledby="viewTitle" hidden>
+        <div class="ag">
+          <div class="ag-stage">
+            <div class="ag-bar">
+              <span id="layerErrs" class="xor-in" aria-live="polite"></span>
+              <span class="grow"></span>
+              <span class="ag-count" id="agCount" aria-live="polite">Yükleniyor…</span>
+              <button type="button" id="xorBtn" title="XOR sinir ağını incele">XOR</button>
+              <button type="button" class="icon" id="agRefresh" aria-label="Ağı yenile" title="Yenile"><svg class="ic" aria-hidden="true"><use href="#i-updates"/></svg></button>
+              <button type="button" class="icon narrow-only" id="inspToggle" aria-label="Paneli aç/kapat" title="Panel" aria-controls="inspector"><svg class="ic" aria-hidden="true"><use href="#i-side"/></svg></button>
+            </div>
+            <div class="graph-host" id="graphHost"></div>
+          </div>
+          <aside class="inspector" id="inspector" aria-labelledby="inspTitle" data-sheet="closed">
+            <div class="insp-h">
+              <button type="button" class="ghost icon" id="inspBack" aria-label="Genel bakışa dön" title="Geri" hidden><svg class="ic" aria-hidden="true"><use href="#i-back"/></svg></button>
+              <h2 id="inspTitle">Genel bakış</h2>
+              <span class="grow"></span>
+              <button type="button" class="ghost icon sheet-handle" id="sheetBtn" aria-label="Paneli büyüt" aria-expanded="false" title="Panel"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
+            </div>
+            <div class="insp-body" id="inspBody">
+              <div class="insp-pane" id="pane-overview">
+                <ul class="layer-list" id="layerList" aria-label="Katmanlar"></ul>
+                <h3 class="sub-h">Son araştırmalar</h3>
+                <div id="jobs"></div>
+              </div>
+              <div class="insp-pane" id="pane-neural" hidden>
+                <div class="xor-in" role="group" aria-label="XOR girdisi (a, b)">
+                  <button type="button" data-xor="0,0" aria-pressed="false" aria-label="a=0, b=0">0 0</button><button type="button" data-xor="0,1" aria-pressed="false" aria-label="a=0, b=1">0 1</button><button type="button" data-xor="1,0" aria-pressed="true" aria-label="a=1, b=0">1 0</button><button type="button" data-xor="1,1" aria-pressed="false" aria-label="a=1, b=1">1 1</button>
+                </div>
+                <div class="readout" id="neuralReadout" data-state="unknown" aria-live="polite">
+                  <span class="k">Tahmin</span><span class="v" id="roPred">—</span>
+                  <span class="k">Beklenen</span><span class="v" id="roExp">—</span>
+                  <span class="k">Durum</span><span class="note" id="roMeta">Yükleniyor…</span>
+                </div>
+                <div id="neuralErr" hidden></div>
+                <div class="neural-host" id="neuralHost"></div>
+                <div id="neuralInfo"></div>
+              </div>
+              <div class="insp-pane" id="pane-node" hidden aria-live="polite"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
 
-    <details class="tool" id="panel-v7">
-      <summary>Ajanlar</summary>
-      <div class="tool-body">
-        <label for="agentRequest">Geliştirme isteği</label>
-        <textarea id="agentRequest" rows="3" placeholder="Örn. metinleri özetleyen saf bir Python fonksiyonu"></textarea>
-        <label for="agentTarget">Hedef modül</label>
-        <select id="agentTarget"><option>research_extensions.py</option><option>skills_helpers.py</option></select>
-        <div class="actions"><button type="button" id="agentStart" class="primary" data-act="agentRun">Ajanları çalıştır</button><button type="button" data-act="agentList">Geçmiş</button></div>
-        <pre id="agentOutput" class="console" aria-live="polite"></pre>
-        <label for="v9task">Yetenek taraması</label><textarea id="v9task" rows="2" placeholder="Görev"></textarea>
-        <div class="actions"><button type="button" data-act="v9scan">Tara</button><button type="button" data-act="v9parallel">Paralel analiz</button><button type="button" data-act="v9health">Sistem kontrolü</button><button type="button" data-act="v9list">Roller</button></div>
-        <pre id="v9result" class="console" aria-live="polite"></pre><div id="v9agents"></div>
-      </div>
-    </details>
+      <!-- ============ Güncellemeler ============ -->
+      <section class="panel" id="panel-updates" aria-labelledby="viewTitle" hidden>
+        <div id="approvals" tabindex="-1" class="card">
+          <p class="auto-line"><span class="pill" id="autoMode" data-state="unknown">Otomatik güncelleme: —</span>
+            <span class="hint" tabindex="0" title="Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa uygulanır. Korunan dosyalar: vector_upgrade.py, local_models.py, server.py, axis_sqlite.py, test_*.py. Kapatmak için sunucuyu AXIS_AUTO_APPLY=0 ile başlat. Diğer öneriler senin onayını bekler." aria-label="Docker testi PASS olmadan hiçbir çekirdek güncelleme uygulanmaz. Diğer öneriler senin onayını bekler.">?</span></p>
+          <p class="restart" id="restartNote" hidden>Yeniden başlatma gerekli</p>
+          <h2 class="sub-h">Son otomatik</h2>
+          <div id="apAuto"><p class="empty">Henüz yok.</p></div>
+          <h2 class="sub-h">Bekleyen</h2>
+          <p class="empty" id="apprEmpty">Onay bekleyen öneri yok.</p>
+          <div id="apUpgrade"></div><div id="apSkill"></div><div id="apAgent"></div><div id="apBrain"></div>
+          <pre id="updOut" class="console" aria-live="polite"></pre>
+        </div>
+      </section>
 
-    <details class="tool" id="panel-v10">
-      <summary>Öğrenilmiş beceriler</summary>
-      <div class="tool-body">
-        <div class="actions"><button type="button" data-act="brainLoad">Deneyimler</button><button type="button" data-act="brainSuggest">Adayları tara</button><button type="button" data-act="brainVisualize">Beceri ağını göster</button></div>
-        <div class="field-row"><div><label for="brainName">Beceri adı</label><input id="brainName" placeholder="Ad"></div><div><label for="brainSteps">Araçlar</label><input id="brainSteps" placeholder="research,synthesize"></div></div>
-        <label for="brainEvidence">Deneyim ID'leri</label><input id="brainEvidence" placeholder="virgülle">
-        <div class="actions"><button type="button" class="primary" data-act="brainPropose">Öner</button></div>
-        <pre id="brainOutput" class="console" aria-live="polite"></pre><div id="brainSkillList"></div>
-        <h3>Onaylı becerileri çalıştır</h3>
-        <div class="actions"><button type="button" data-act="axisList">Listele</button></div>
-        <div id="axisSkills"></div>
-        <label for="axisQuery">Arama metni</label><input id="axisQuery" placeholder="Kavram">
-        <pre id="axisOutput" class="console" aria-live="polite"></pre>
-      </div>
-    </details>
-  </section>
-</main>
+      <!-- ============ Sistem ============ -->
+      <section class="panel" id="panel-system" aria-labelledby="viewTitle" hidden>
+        <ul class="status-list" id="statusRail">
+          <li class="st" id="st-server" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sunucu</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-ollama" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ollama</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-model" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Model</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-autoupd" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Oto. güncelleme</span><span class="st-val">—</span><span class="st-note"></span></li>
+        </ul>
+        <p class="auto-note">Yenileme: <span id="pollState">açık</span> · <span id="stamp">—</span></p>
+        <section class="card" aria-labelledby="hFeed">
+          <div class="card-h"><h2 id="hFeed">Etkinlik</h2></div>
+          <p id="msg" role="status" aria-live="polite"></p>
+          <ol class="feed" id="feed" aria-label="Etkinlik akışı"></ol>
+          <details class="out" id="cmdOutWrap"><summary>Son ham çıktı</summary><pre id="cmdOut" class="console" aria-live="polite"></pre></details>
+        </section>
+      </section>
 
+      <!-- ============ Araçlar ============ -->
+      <section class="panel tools" id="panel-tools" aria-labelledby="viewTitle" hidden>
+        <p class="note">Bu araçlar dosya yazabilir; hiçbiri kendiliğinden çalışmaz.</p>
+        <details class="tool" id="panel-v4">
+          <summary>Araştırma</summary>
+          <div class="tool-body">
+            <label for="v4topic">Sentez konusu</label><input id="v4topic" placeholder="Daha önce araştırdığın konu">
+            <div class="actions"><button type="button" data-act="v4synth">Literatür sentezi</button></div>
+            <label for="v4pdf">PDF ekle</label><input type="file" id="v4pdf" accept=".pdf,application/pdf">
+            <div class="actions"><button type="button" data-act="v4upload">PDF'i bilgi ağına ekle</button></div>
+            <label for="v4query">Hafızada ara</label><input id="v4query" placeholder="Kavram">
+            <div class="actions"><button type="button" data-act="v4parallel" title="Düğüm sayımı, son araştırmalar ve hafıza araması">3 aracı paralel çalıştır</button></div>
+            <pre id="v4out" class="console" aria-live="polite"></pre>
+          </div>
+        </details>
+        <details class="tool" id="panel-evolution">
+          <summary>Beceri dosyaları</summary>
+          <div class="tool-body">
+            <div class="field-row"><div><label for="v4skill">Beceri adı (LLM)</label><input id="v4skill" placeholder="sayi_ozetle"></div><div><label for="v4desc">Ne yapsın?</label><input id="v4desc" placeholder="Açıklama"></div></div>
+            <div class="actions"><button type="button" data-act="v4generate">LLM ile kod öner</button></div>
+            <label for="skillName">Beceri adı</label><input id="skillName" placeholder="hesapla">
+            <label for="skillCode">Python kodu</label><textarea id="skillCode" rows="5" placeholder="def run(data):&#10;    return data"></textarea>
+            <label for="skillSummary">Açıklama</label><input id="skillSummary" placeholder="Değişiklik açıklaması">
+            <div class="actions"><button type="button" class="primary" data-act="proposeSkill">Öner</button><button type="button" data-act="refreshProposals">Yenile</button></div>
+            <pre id="evolutionOutput" class="console" aria-live="polite"></pre>
+            <div id="proposals"></div>
+          </div>
+        </details>
+        <details class="tool" id="panel-v5">
+          <summary>Çekirdek güncellemeler</summary>
+          <div class="tool-body">
+            <label for="v5target">Hedef modül</label><input id="v5target" value="research_extensions.py" placeholder="modul.py" title="AXIS üst düzey .py; korunan dosyalar ve test_*.py hariç">
+            <label for="v5code">Python kodu</label><textarea id="v5code" rows="7" placeholder="Önerilen kod"></textarea>
+            <label for="v5desc">Açıklama</label><input id="v5desc" placeholder="Değişiklik açıklaması">
+            <div class="actions"><button type="button" class="primary" data-act="v5propose" title="Docker testi PASS ise otomatik uygulanır">Öner</button><button type="button" data-act="v5list">Yenile</button></div>
+            <pre id="v5out" class="console" aria-live="polite"></pre>
+            <div id="v5items"></div>
+          </div>
+        </details>
+        <details class="tool" id="panel-v7">
+          <summary>Ajanlar</summary>
+          <div class="tool-body">
+            <label for="agentRequest">Geliştirme isteği</label>
+            <textarea id="agentRequest" rows="3" placeholder="Örn. metinleri özetleyen saf bir Python fonksiyonu"></textarea>
+            <label for="agentTarget">Hedef modül</label>
+            <select id="agentTarget"><option>research_extensions.py</option><option>skills_helpers.py</option></select>
+            <div class="actions"><button type="button" id="agentStart" class="primary" data-act="agentRun">Ajanları çalıştır</button><button type="button" data-act="agentList">Geçmiş</button></div>
+            <pre id="agentOutput" class="console" aria-live="polite"></pre>
+            <label for="v9task">Yetenek taraması</label><textarea id="v9task" rows="2" placeholder="Görev"></textarea>
+            <div class="actions"><button type="button" data-act="v9scan">Tara</button><button type="button" data-act="v9parallel">Paralel analiz</button><button type="button" data-act="v9health">Sistem kontrolü</button><button type="button" data-act="v9list">Roller</button></div>
+            <pre id="v9result" class="console" aria-live="polite"></pre><div id="v9agents"></div>
+          </div>
+        </details>
+        <details class="tool" id="panel-v10">
+          <summary>Öğrenilmiş beceriler</summary>
+          <div class="tool-body">
+            <div class="actions"><button type="button" data-act="brainLoad">Deneyimler</button><button type="button" data-act="brainSuggest">Adayları tara</button><button type="button" data-act="brainVisualize">Beceri ağını göster</button></div>
+            <div class="field-row"><div><label for="brainName">Beceri adı</label><input id="brainName" placeholder="Ad"></div><div><label for="brainSteps">Araçlar</label><input id="brainSteps" placeholder="research,synthesize"></div></div>
+            <label for="brainEvidence">Deneyim ID'leri</label><input id="brainEvidence" placeholder="virgülle">
+            <div class="actions"><button type="button" class="primary" data-act="brainPropose">Öner</button></div>
+            <pre id="brainOutput" class="console" aria-live="polite"></pre><div id="brainSkillList"></div>
+            <h3>Onaylı becerileri çalıştır</h3>
+            <div class="actions"><button type="button" data-act="axisList">Listele</button></div>
+            <div id="axisSkills"></div>
+            <label for="axisQuery">Arama metni</label><input id="axisQuery" placeholder="Kavram">
+            <pre id="axisOutput" class="console" aria-live="polite"></pre>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script src="/static/graph.js"></script>
+<script src="/static/neural.js"></script>
 <script>
 'use strict';
 /* =====================================================================
-   AXIS console. Server data is rendered only via textContent / DOM nodes.
+   AXIS shell. Server data is rendered only via textContent / DOM nodes.
+   Optional view modules: window.AxisGraph (graph.js), window.AxisNeural (neural.js).
+   Both may be missing or throw; the shell then shows "Görünüm yüklenemedi" and keeps working.
    ===================================================================== */
 const $=s=>document.querySelector(s);
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined&&text!==null)e.textContent=String(text);return e}
@@ -559,13 +277,15 @@ async function postJSON(path,payload){const r=await fetch(path,{method:'POST',he
 /* names kept from the previous panels */
 const apiEvolution=postJSON,v4post=postJSON,v5request=postJSON,v9post=postJSON;
 async function brainReq(path,data){return data?postJSON(path,data):getJSON(path)}
+const RM=window.matchMedia?matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
 
-/* ---------------- Activity feed & status rail ---------------- */
+/* ---------------- Toasts, activity feed & status tiles ---------------- */
+function toast(text,state){const t=el('div','toast',text);t.dataset.state=state||'info';const box=$('#toasts');box.append(t);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>t.remove(),state==='fail'?8000:4000)}
 function feed(text,state,announce){const li=el('li');li.dataset.state=state||'info';li.append(el('time','',clock()),el('span','fdot'),el('span','ftext',text));const f=$('#feed');f.prepend(li);while(f.children.length>40)f.lastChild.remove();if(announce)$('#msg').textContent=text}
 function setSt(key,state,value,note){const li=$('#st-'+key);if(!li)return;li.dataset.state=state;li.querySelector('.st-val').textContent=value;li.querySelector('.st-note').textContent=note||'';
   const states=[...document.querySelectorAll('#statusRail .st')].map(x=>x.dataset.state);const d=$('#sysDot');if(d)d.dataset.state=states.includes('fail')?'fail':states.includes('warn')?'warn':'ok'}
 let connOk=null;
-function setConn(ok){if(ok===connOk)return;connOk=ok;const c=$('#conn');c.dataset.state=ok?'ok':'fail';$('#connText').textContent=ok?'Çevrimiçi · yerel':'Bağlantı yok';setSt('server',ok?'ok':'fail',ok?'Bağlı':'Bağlantı yok',ok?location.host:'server.py çalışıyor mu?');if(!ok)feed('Sunucu bağlantısı kurulamadı','fail',true)}
+function setConn(ok){if(ok===connOk)return;connOk=ok;const c=$('#conn');c.dataset.state=ok?'ok':'fail';$('#connText').textContent=ok?'Çevrimiçi · yerel':'Bağlantı yok';setSt('server',ok?'ok':'fail',ok?'Bağlı':'Bağlantı yok',ok?location.host:'server.py çalışıyor mu?');if(!ok){feed('Sunucu bağlantısı kurulamadı','fail',true);toast('Sunucu bağlantısı kurulamadı','fail')}}
 function stamp(){$('#stamp').textContent=clock()}
 function showOut(x){const o=$('#cmdOut');o.textContent=pretty(x);$('#cmdOutWrap').open=true}
 function updShow(x){const o=$('#updOut');o.textContent=pretty(x)}
@@ -576,181 +296,199 @@ const pend={skill:0,upgrade:0,agent:0,brain:0};
 function updatePending(){const n=pend.skill+pend.upgrade+pend.agent+pend.brain;const b=$('#apprCount');b.textContent=n?String(n):'';b.dataset.n=String(n);$('#apprEmpty').hidden=n>0;setSt('approvals',n?'warn':'ok',n?n+' öneri':'Yok',n?'Kararını bekliyor':'')}
 
 /* =====================================================================
-   Core scene: 3D projection on a 2D canvas (no libraries)
+   Ağ: one layered network (graph.js) + inspector (neural.js / node details)
    ===================================================================== */
-const c=$('#c'),ctx=c.getContext('2d');
-let nodes=[],edges=[],projected=[],yaw=.25,pitch=.15,zoom=1,drag=false,moved=false,lastX=0,lastY=0,selected=null,mode='neural';
-const RM=window.matchMedia?matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
-let auto=false; /* calm by default; signal pulses still show activity unless reduced motion */
-const palette={topic:'#5fd4f4',paper:'#b39aff',concept:'#66d8a9',skill:'#ffd27b',experience:'#8fb4d8',agent:'#38bdf8',lesson:'#f5b85b',task:'#a78bfa',neuron:'#5fd4f4'};
-const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0};
-function mix(a,b,t){const p=x=>[parseInt(x.slice(1,3),16),parseInt(x.slice(3,5),16),parseInt(x.slice(5,7),16)];const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')'}
-function arrange(raw){
-  const ns=Array.isArray(raw&&raw.nodes)?raw.nodes:[];
-  const layerSize={};for(const n of ns)if(n&&n.kind==='neuron'){const L=+n.layer||0;layerSize[L]=Math.max(layerSize[L]||0,(+n.index||0)+1)}
-  const Lmax=Math.max(0,...Object.keys(layerSize).map(Number));
-  nodes=ns.filter(n=>n&&n.id!==undefined).map(n=>{
-    const id=String(n.id),kind=String(n.kind||'concept'),a=hash(id),b=hash(id+'b'),d=hash(id+'c');
-    const label=String(n.label!==undefined&&n.label!==null?n.label:id);
-    if(kind==='neuron'){const L=+n.layer||0,cnt=layerSize[L]||1,i=+n.index||0;const act=typeof n.activation==='number'?Math.max(0,Math.min(1,Math.abs(n.activation))):null;
-      return {...n,id,kind,label,act,x:(L-Lmax/2)*170,y:(i-(cnt-1)/2)*46,z:Math.sin(i*2.3)*24,color:act===null?palette.neuron:mix('#1d3b52','#b8f3ff',act),r:7+(act||0)*5}}
-    const level=kind==='topic'?70:kind==='paper'?160:260;const phi=(a/4294967296)*Math.PI*2,theta=Math.acos(2*(b/4294967296)-1),radius=level+(d%70);
-    return {...n,id,kind,label,x:radius*Math.sin(theta)*Math.cos(phi),y:radius*Math.cos(theta),z:radius*Math.sin(theta)*Math.sin(phi),color:palette[kind]||'#ffd27b',r:kind==='topic'?10:kind==='paper'?7:5}});
-  const map=new Map(nodes.map((n,i)=>[n.id,i]));
-  edges=(Array.isArray(raw&&raw.edges)?raw.edges:[]).filter(e=>e&&map.has(String(e.source))&&map.has(String(e.target))).map(e=>[map.get(String(e.source)),map.get(String(e.target)),typeof e.weight==='number'?e.weight:undefined,typeof e.signal==='number'?e.signal:undefined,hash(String(e.source)+String(e.target))/4294967296]);
-  $('#counts').textContent=`${nodes.length} düğüm · ${edges.length} ilişki`;
-  draw();
-}
-function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);c.width=Math.max(1,c.clientWidth*dpr);c.height=Math.max(1,c.clientHeight*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);draw()}
-function proj(n){let x=n.x*Math.cos(yaw)-n.z*Math.sin(yaw),z=n.x*Math.sin(yaw)+n.z*Math.cos(yaw),y=n.y*Math.cos(pitch)-z*Math.sin(pitch);z=n.y*Math.sin(pitch)+z*Math.cos(pitch);const scale=Math.min(c.clientWidth,c.clientHeight)/820*zoom*(650/(650+z));return {...n,sx:c.clientWidth/2+x*scale,sy:c.clientHeight/2+y*scale,sz:z,scale}}
-const EMPTY={knowledge:'İlk araştırmanı başlatarak beyni oluştur',neural:'Sinir ağı yüklenemedi',skills:'Henüz deneyim veya beceri yok',learning:''};
-function draw(ts){
-  const w=c.clientWidth,h=c.clientHeight;if(!w||!h)return;
-  ctx.clearRect(0,0,w,h);
-  const bg=ctx.createRadialGradient(w/2,h/2,10,w/2,h/2,Math.max(w,h)*.75);bg.addColorStop(0,'#0f2438');bg.addColorStop(1,'#040810');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
-  /* faint holographic rings */
-  const R=Math.min(w,h);ctx.lineWidth=1;for(let i=1;i<=4;i++){ctx.strokeStyle=`rgba(95,212,244,${.07-i*.012})`;ctx.beginPath();ctx.arc(w/2,h/2,R*.12*i*zoom,0,Math.PI*2);ctx.stroke()}
-  projected=nodes.map(proj);const maxLayer=nodes.reduce((m,x)=>x.kind==='neuron'?Math.max(m,+x.layer||0):m,0);
-  for(const [a,b,weight,signal] of edges){const A=projected[a],B=projected[b];
-    if(signal!==undefined){/* live signal = weight × source activation: sign → colour, |signal| → thickness and opacity; weight shown as faint underlay */
-      const s=Math.abs(signal);if(weight!==undefined){ctx.strokeStyle='rgba(120,160,190,.10)';ctx.lineWidth=Math.max(.3,Math.abs(weight)*.9);ctx.beginPath();ctx.moveTo(A.sx,A.sy);ctx.lineTo(B.sx,B.sy);ctx.stroke()}
-      const al=(.08+Math.min(.82,s*.55)).toFixed(3);ctx.strokeStyle=signal>=0?`rgba(72,224,196,${al})`:`rgba(250,112,156,${al})`;ctx.lineWidth=Math.max(.4,Math.min(6,.4+s*2.4))}
-    else{ctx.strokeStyle=weight===undefined?'rgba(105,180,226,.20)':weight>=0?'rgba(72,214,190,.32)':'rgba(250,112,156,.32)';ctx.lineWidth=weight===undefined?.8:Math.max(.3,Math.abs(weight)*2.2)}
-    ctx.beginPath();ctx.moveTo(A.sx,A.sy);ctx.lineTo(B.sx,B.sy);ctx.stroke()}
-  /* signal pulses along weighted edges (neural view, motion allowed only) */
-  if(mode==='neural'&&!RM.matches){const t=(ts||performance.now())/1600;for(const [a,b,weight,signal,phase] of edges){if(signal===undefined||Math.abs(signal)<.05)continue;const A=projected[a],B=projected[b],f=(t+phase)%1;ctx.fillStyle=signal>=0?'rgba(150,255,230,.85)':'rgba(255,150,180,.85)';ctx.beginPath();ctx.arc(A.sx+(B.sx-A.sx)*f,A.sy+(B.sy-A.sy)*f,Math.min(3.2,1.2+Math.abs(signal)*1.5),0,Math.PI*2);ctx.fill()}}
-  for(const n of projected.slice().sort((p,q)=>q.sz-p.sz)){const r=Math.max(2,n.r*n.scale);ctx.shadowColor=n.color;ctx.shadowBlur=selected===n.id?24:10;ctx.fillStyle=n.color;ctx.beginPath();ctx.arc(n.sx,n.sy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
-    if(selected===n.id){ctx.strokeStyle='#eaf6ff';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(n.sx,n.sy,r+5,0,Math.PI*2);ctx.stroke()}
-    ctx.fillStyle='#eaf6ff';ctx.font='12px system-ui';
-    if(n.kind==='neuron'&&typeof n.activation==='number'&&(n.layer===0||n.layer===maxLayer)){/* input/output activations beside the node */
-      const first=n.layer===0;ctx.textAlign=first?'right':'left';ctx.fillText((first?'girdi ':'çıktı ')+n.activation.toFixed(3),n.sx+(first?-(r+8):r+8),n.sy+4)}
-    else if(n.kind==='topic'||n.id===selected){ctx.textAlign='center';ctx.fillText(n.label.slice(0,42),n.sx,n.sy+r+15)}}
-  if(!nodes.length&&EMPTY[mode]){ctx.textAlign='center';ctx.fillStyle='#a6c2d9';ctx.font='16px system-ui';ctx.fillText(EMPTY[mode],w/2,h/2)}
-}
-function animating(){return auto||(mode==='neural'&&!RM.matches&&edges.length>0)}
-function loop(ts){if(!document.hidden&&mode!=='learning'&&animating()){if(auto)yaw+=.0016;draw(ts)}requestAnimationFrame(loop)}
-requestAnimationFrame(loop);
-function setRotate(on){auto=on;const b=$('#rotate');b.textContent='Döndür: '+(on?'Açık':'Kapalı');b.setAttribute('aria-pressed',String(on))}
-if(RM.addEventListener)RM.addEventListener('change',()=>{if(RM.matches)setRotate(false);draw()});
-c.addEventListener('pointerdown',e=>{drag=true;moved=false;lastX=e.clientX;lastY=e.clientY;c.setPointerCapture(e.pointerId)});
-c.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;if(Math.abs(dx)+Math.abs(dy)>2)moved=true;yaw+=dx*.006;pitch=Math.max(-1.5,Math.min(1.5,pitch+dy*.006));lastX=e.clientX;lastY=e.clientY;draw()});
-c.addEventListener('pointerup',()=>drag=false);c.addEventListener('pointercancel',()=>drag=false);
-c.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.25,Math.min(5,zoom*Math.exp(-e.deltaY*.001)));draw()},{passive:false});
-c.addEventListener('keydown',e=>{const k=e.key;let used=true;if(k==='ArrowLeft')yaw-=.08;else if(k==='ArrowRight')yaw+=.08;else if(k==='ArrowUp')pitch=Math.max(-1.5,pitch-.08);else if(k==='ArrowDown')pitch=Math.min(1.5,pitch+.08);else if(k==='+'||k==='=')zoom=Math.min(5,zoom*1.15);else if(k==='-'||k==='_')zoom=Math.max(.25,zoom/1.15);else used=false;if(used){e.preventDefault();draw()}});
-c.addEventListener('click',async e=>{
-  if(moved)return;const rect=c.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
-  const n=projected.map(p=>({...p,dist:Math.hypot(p.sx-x,p.sy-y)})).sort((p,q)=>p.dist-q.dist)[0];if(!n||n.dist>22)return;
-  await selectNode(n);
-});
-async function selectNode(n){
-  selected=n.id;draw();$('#nodeBox').open=true;const box=$('#details');box.replaceChildren();box.append(el('strong','',n.label),el('p','',n.description||n.kind));
-  if(n.kind==='neuron'){const dl=el('dl','kv');const row=(k,v)=>{if(v!==undefined&&v!==null)dl.append(el('dt','',k),el('dd','',v))};row('Katman',n.layer);row('Sıra',n.index);row('Aktivasyon',n.activation);row('Ön aktivasyon',n.pre_activation);row('Bias',n.bias);row('Aktivasyon fonksiyonu',n.activation_fn);
-    const inc=edges.filter(e=>nodes[e[1]]&&nodes[e[1]].id===n.id&&e[3]!==undefined).map(e=>nodes[e[0]].label+': '+e[3].toFixed(3));if(inc.length)row('Gelen sinyal',inc.join(' · '));box.append(dl)}
-  if(mode!=='knowledge')return;
-  try{const res=await fetch('/api/sources?node='+encodeURIComponent(n.id)),data=await res.json();
-    if(!data.length)box.append(el('p','','Bu düğüme doğrudan bağlanan kaynak yok. Bağlantılı makaleleri incele.'));
-    for(const s of data){const div=el('div','source');const a=el('a','',s.title+' ('+(s.year||'t.y.')+')');a.href=/^https:\/\//.test(s.url)?s.url:'#';a.target='_blank';a.rel='noopener noreferrer';div.append(a,el('p','',s.quote||'Özet bulunamadı'));box.append(div)}
-  }catch(err){box.append(el('p','','Kaynaklar yüklenemedi'))}
-}
-/* Select a node by id (from an answer's memory list): switch to the knowledge graph if needed. */
-async function selectNodeById(id){
-  switchTab('memory');if(mode!=='knowledge')await setMode('knowledge');else await loadGraph();
-  const n=nodes.find(x=>x.id===id);
-  if(!n){feed('Düğüm grafikte görünmüyor (yalnızca son 500 düğüm çizilir): '+id,'warn',true);return}
-  await selectNode(n);$('#scene').scrollIntoView({block:'nearest',behavior:RM.matches?'auto':'smooth'});
-}
-if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe($('#scene'));
-window.addEventListener('resize',resize);
+const LAYERS=['neural','knowledge','skills','learning'];
+const LAYER_TR={neural:'Sinir ağı',knowledge:'Bilgi',skills:'Beceriler',learning:'Öğrenme'};
+const layerData={neural:null,knowledge:null,skills:null,learning:null},layerErr={};
+const xor={a:'1',b:'0'};
+let graphMounted=false,graphFailed=false,neuralMounted=false,neuralFailed=false,netSeq=0,netLoadedAt=0,netStale=false,lastTrained=null;
+function modErrorCard(msg,retry){const d=el('div','err');d.setAttribute('role','alert');d.append(el('h2','','Görünüm yüklenemedi'),el('p','',msg));if(retry){const a=el('div','actions');a.append(btn('Yeniden dene','',retry));d.append(a)}return d}
+function loadScript(name){return new Promise((ok,fail)=>{const s=document.createElement('script');s.src='/static/'+name+'?r='+Date.now();s.onload=ok;s.onerror=()=>fail(Error(name+' alınamadı'));document.body.append(s)})}
 
-/* ---------------- Modes ---------------- */
-const MODES={
-  knowledge:{title:'Bilgi ağı',legend:[['Konu','topic'],['Makale','paper'],['Kavram','concept']]},
-  neural:{title:'Sinir ağı · XOR',legend:[['Nöron (parlaklık = aktivasyon)','neuron'],['Pozitif sinyal','#48e0c4'],['Negatif sinyal','#fa709c'],['Kalınlık = |ağırlık × aktivasyon|','#78a0be']]},
-  skills:{title:'Beceri ağı',legend:[['Deneyim','experience'],['Öğrenilmiş beceri','skill']]},
-  learning:{title:'Öğrenme 2B',legend:[['Ajan','#38bdf8'],['Görev','#a78bfa'],['Ders','#f59e0b']]}
-};
-function buildLegend(m){const lg=$('#legend');lg.replaceChildren();for(const [t,k] of MODES[m].legend){const s=el('span');const sw=el('span','swatch');sw.style.background=palette[k]||k;s.append(sw,document.createTextNode(t));lg.append(s)}}
-function hudNote(t){$('#hudNote').textContent=t||''}
-async function setMode(m){
-  if(!MODES[m])return;const prev=mode;mode=m;selected=null;hudNote('');
-  if(prev!==m){const box=$('#details');box.replaceChildren(el('p','',m==='learning'?'Öğrenme 2B görünümünde düğüm adları fareyle üzerine gelince görünür.':'Çekirdekte bir düğüme tıkla; açıklaması ve kaynak bağlantıları burada görünür.'))}
-  for(const b of document.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===m));
-  $('#xorBox').hidden=m!=='neural';$('#neuralReadout').hidden=m!=='neural';const learn=m==='learning';c.hidden=learn;$('#axis-v13-graph').toggleAttribute('hidden',!learn);/* SVG has no .hidden property */$('#axis-v13-summary').hidden=!learn;$('#counts').hidden=learn;$('#tip').hidden=learn;
-  $('#home').disabled=learn;$('#rotate').disabled=learn;$('#modeTitle').textContent=MODES[m].title;buildLegend(m);
-  if(!learn)resize();
-  if(m==='knowledge')await loadGraph();else if(m==='neural')await showNeural();else if(m==='skills')await loadSkillGraph();else await v13Update();
+/* ----- graph.js ----- */
+function graphError(e){
+  graphFailed=true;graphMounted=false;console.warn('AxisGraph:',e);
+  try{if(window.AxisGraph&&AxisGraph.destroy)AxisGraph.destroy()}catch(x){}
+  const host=$('#graphHost'),st=el('div','state');st.append(modErrorCard('Ağ görünümü (graph.js) açılamadı. Diğer bölümler ve sağdaki panel çalışmaya devam eder.',retryGraph));host.replaceChildren(st);
+  $('#agCount').textContent=countText();
 }
-let graphCache=null;
-async function loadGraph(){try{const g=await getJSON('/api/graph');graphCache=g;if(mode==='knowledge')arrange(g)}catch(e){hudNote(e.message)}}
-async function loadSkillGraph(){try{const d=await brainReq('/api/brain-graph');if(mode==='skills')arrange(d);return d}catch(e){hudNote(e.message);throw e}}
+async function retryGraph(){graphFailed=false;$('#graphHost').replaceChildren();if(!window.AxisGraph){try{await loadScript('graph.js')}catch(e){return graphError(e)}}ensureGraph();pushLayers()}
+function ensureGraph(){
+  if(graphMounted||graphFailed)return graphMounted;
+  if(!window.AxisGraph||typeof AxisGraph.mount!=='function'){graphError(Error('graph.js yok'));return false}
+  const host=$('#graphHost'),st=el('div','state');st.append(el('p','loading','Yükleniyor…'));host.replaceChildren(st);
+  try{host.replaceChildren();AxisGraph.mount(host,{onNodeSelect:onGraphNode,onLayerFocus:onGraphLayer});graphMounted=true}catch(e){graphError(e)}
+  return graphMounted;
+}
+function pushLayers(){if(!graphMounted)return;try{AxisGraph.setLayers({neural:layerData.neural,knowledge:layerData.knowledge,skills:layerData.skills,learning:layerData.learning})}catch(e){graphError(e)}}
+function graphFocus(target){if(!ensureGraph())return false;try{AxisGraph.focus(target);return true}catch(e){console.warn('AxisGraph.focus:',e);return false}}
+function onGraphNode(info){try{
+  if(!info){if(pane==='node')showPane('overview');return}
+  if(info.layer==='neural'){openNeural();return}
+  showNode(info);
+}catch(e){console.warn(e)}}
+function onGraphLayer(name){if(name==='neural')openNeural();else if(name===null&&pane==='neural')showPane('overview')}
 
-/* ---------------- Neural network (hero) ---------------- */
-const NEURAL_KNOWN=new Set(['available','trained','architecture','description','nodes','edges','parameter_count','inputs','prediction','examples','reason','error','backend','epochs','loss','max_error','predicted_class','expected','weights','framework','backend_note','converged','seed','learning_rate','optimizer','loss_fn','activation_fns','training_ms']);
-const num=(v,d)=>typeof v==='number'&&isFinite(v)?v.toFixed(d):'—';
-function syncXorButtons(){const k=$('#xorA').value+','+$('#xorB').value;for(const b of document.querySelectorAll('[data-xor]'))b.setAttribute('aria-pressed',String(b.dataset.xor===k))}
-function setReadout(state,eq,pred,exp,meta,flag){const r=$('#neuralReadout');r.dataset.state=state;$('#roEq').textContent=eq;$('#roPred').textContent=pred;$('#roExp').textContent=exp;$('#roMeta').textContent=meta;$('#roFlag').textContent=flag}
+/* ----- data: four sources in parallel ----- */
+function nodeCount(d){return d&&Array.isArray(d.nodes)?d.nodes.length:0}
+function countText(){let n=0,f=0;for(const k of LAYERS){if(layerErr[k])f++;else n+=nodeCount(layerData[k])}return n+' düğüm'+(f?' · '+f+' katman hatalı':'')}
+async function fetchNeural(){
+  let r;try{r=await fetch('/api/neural?a='+xor.a+'&b='+xor.b)}catch(e){setConn(false);throw Error('Sunucu bağlantısı kurulamadı')}
+  setConn(true);let d;try{d=await r.json()}catch(e){throw Error('HTTP '+r.status)}
+  /* HTTP 400 or available:false: show the server's reason, no alert() */
+  if(!r.ok||!d||!d.available)throw Error((d&&(d.reason||d.error))||('HTTP '+r.status));
+  return d;
+}
+async function loadNetwork(){
+  const seq=++netSeq;$('#agCount').textContent='Yükleniyor…';
+  const res=await Promise.allSettled([fetchNeural(),getJSON('/api/graph'),brainReq('/api/brain-graph'),v13Update()]);
+  if(seq!==netSeq)return;
+  const newlyFailed=[];
+  LAYERS.forEach((k,i)=>{const r=res[i];if(r.status==='fulfilled'){layerData[k]=r.value;delete layerErr[k]}else{if(!layerErr[k])newlyFailed.push(LAYER_TR[k]);layerData[k]=null;layerErr[k]=(r.reason&&r.reason.message)||'Hata'}});
+  netLoadedAt=Date.now();netStale=false;
+  afterNeural();pushLayers();renderLayerState();
+  if(newlyFailed.length)toast('Yüklenemedi: '+newlyFailed.join(', '),'fail');
+}
+function renderLayerState(){
+  const errs=$('#layerErrs');errs.replaceChildren();
+  for(const k of LAYERS)if(layerErr[k]){const c=el('span','layer-err',LAYER_TR[k]);c.tabIndex=0;c.title=layerErr[k];c.setAttribute('aria-label',LAYER_TR[k]+' katmanı yüklenemedi: '+layerErr[k]);errs.append(c)}
+  const list=$('#layerList');list.replaceChildren();
+  for(const k of LAYERS){const li=el('li');li.dataset.state=layerErr[k]?'fail':'ok';const name=el('span','lay',LAYER_TR[k]);name.dataset.layer=k;li.append(name,el('span','n',layerErr[k]?'hata':String(nodeCount(layerData[k]))));if(layerErr[k])li.title=layerErr[k];list.append(li)}
+  $('#agCount').textContent=countText();
+}
+
+/* ----- inspector panes ----- */
+let pane='overview';
+function showPane(name,title,open){
+  pane=name;for(const p of ['overview','neural','node'])$('#pane-'+p).hidden=p!==name;
+  $('#inspTitle').textContent=title||'Genel bakış';$('#inspBack').hidden=name==='overview';
+  if(name!=='overview'||open)setSheet(true);
+}
+function setSheet(open){const i=$('#inspector');i.dataset.sheet=open?'open':'closed';$('#sheetBtn').setAttribute('aria-expanded',String(open));$('#sheetBtn').setAttribute('aria-label',open?'Paneli küçült':'Paneli büyüt')}
+$('#inspBack').addEventListener('click',()=>{showPane('overview');const b=$('#xorBtn');if(b)b.focus()});
+$('#sheetBtn').addEventListener('click',()=>setSheet($('#inspector').dataset.sheet!=='open'));
+$('#inspToggle').addEventListener('click',()=>setSheet($('#inspector').dataset.sheet!=='open'));
+$('#inspector').addEventListener('keydown',e=>{if(e.key==='Escape'&&pane!=='overview'){e.stopPropagation();showPane('overview');$('#xorBtn').focus()}});
+
+/* ----- neural inspector (neural.js) ----- */
+function ensureNeural(){
+  if(neuralMounted||neuralFailed)return neuralMounted;
+  /* neural.js not shipped yet: quiet fallback (readout + a/b buttons + plain detail list), no error card */
+  if(!window.AxisNeural||typeof AxisNeural.mount!=='function'){neuralFailed=true;$('#neuralHost').hidden=true;return false}
+  /* onInputChange(a,b) is a shell extension to the brief's contract: neural.js may call it when the user flips a/b
+     so the shell fetches /api/neural?a=&b= and updates both modules. Without it the shell's own a/b buttons do this. */
+  $('#neuralHost').hidden=false;
+  try{AxisNeural.mount($('#neuralHost'),{onNodeSelect:()=>{},onInputChange:(a,b)=>setXor(a,b)});neuralMounted=true}catch(e){neuralError(e)}
+  return neuralMounted;
+}
+function neuralError(e){
+  neuralFailed=true;neuralMounted=false;console.warn('AxisNeural:',e);
+  try{if(window.AxisNeural&&AxisNeural.destroy)AxisNeural.destroy()}catch(x){}
+  $('#neuralHost').replaceChildren();$('#neuralHost').hidden=true;const box=$('#neuralErr');box.hidden=false;
+  box.replaceChildren(modErrorCard('Ayrıntılı XOR görünümü (neural.js) açılamadı; temel bilgiler aşağıda.',async()=>{neuralFailed=false;box.hidden=true;if(!window.AxisNeural){try{await loadScript('neural.js')}catch(x){return neuralError(x)}}ensureNeural();afterNeural()}));
+  afterNeural();
+}
+function openNeural(){showPane('neural','XOR ağı');ensureNeural();if(layerData.neural)afterNeural();else refreshNeural()}
 let neuralSeq=0;
-async function showNeural(){
-  if(mode!=='neural')return setMode('neural');
-  syncXorButtons();const a=$('#xorA').value,b=$('#xorB').value,seq=++neuralSeq;const eq='a='+a+' ⊕ b='+b;
-  try{
-    let r;try{r=await fetch('/api/neural?a='+a+'&b='+b)}catch(e){setConn(false);throw Error('Sunucu bağlantısı kurulamadı')}
-    setConn(true);let d;try{d=await r.json()}catch(e){throw Error('HTTP '+r.status)}
-    /* HTTP 400 or available:false: show the server's reason, no alert() */
-    if(!r.ok||!d||!d.available)throw Error((d&&(d.reason||d.error))||('HTTP '+r.status));
-    if(seq!==neuralSeq||mode!=='neural')return d;
-    arrange(d);hudNote('');
-    const trained=d.trained===true;
-    const pred=typeof d.prediction==='number'?d.prediction.toFixed(3):'—';
-    const cls=d.predicted_class!==undefined&&d.predicted_class!==null?String(d.predicted_class):'—';
-    const exp=d.expected!==undefined&&d.expected!==null?String(d.expected):String(Number(a)^Number(b));
-    const meta=[d.backend!==undefined?String(d.backend):null,d.epochs!==undefined?d.epochs+' adım':null,'kayıp '+num(d.loss,4),'max hata '+num(d.max_error,4)].filter(Boolean).join(' · ');
-    const match=cls!=='—'&&cls===exp;
-    $('#counts').textContent+=` · ${d.parameter_count!==undefined?d.parameter_count:'?'} parametre · ${trained?'eğitilmiş XOR':'EĞİTİLMEMİŞ'}`;
-    setReadout(trained?'ok':'fail',eq,cls+'  ('+pred+')',exp,meta,trained?(match?'✓ eğitilmiş XOR · doğru':'✕ eğitilmiş XOR · yanlış tahmin'):'✕ FAILED: ağ eğitilmemiş / yakınsamadı');
-    if(!trained)feed('Sinir ağı FAILED: eğitilmemiş veya yakınsamadı ('+meta+')','fail',true);
-    if(d.description)$('#msg').textContent=String(d.description);
-    renderNeuralInfo(d,pred,cls,exp,trained);setSt('torch',trained?'ok':'fail',trained?'Eğitilmiş':'FAILED','arka uç: '+meta);
-    return d;
-  }catch(e){if(seq!==neuralSeq)return;nodes=[];edges=[];draw();hudNote(e.message);setSt('torch','fail','FAILED',e.message);setReadout('fail',eq,'—','—',e.message,'✕ FAILED');feed('Sinir ağı: '+e.message,'fail',true);throw e}
+async function refreshNeural(){
+  const seq=++neuralSeq;
+  try{const d=await fetchNeural();if(seq!==neuralSeq)return;layerData.neural=d;delete layerErr.neural;afterNeural();pushLayers();renderLayerState()}
+  catch(e){if(seq!==neuralSeq)return;layerData.neural=null;layerErr.neural=e.message;afterNeural();pushLayers();renderLayerState();feed('Sinir ağı: '+e.message,'fail',true)}
 }
+function setXor(a,b){
+  const A=String(a),B=String(b);if(!/^[01]$/.test(A)||!/^[01]$/.test(B))return;/* real-valued inputs stay local to neural.js */
+  if(A===xor.a&&B===xor.b&&layerData.neural)return;
+  xor.a=A;xor.b=B;syncXorButtons();refreshNeural();
+}
+function syncXorButtons(){const k=xor.a+','+xor.b;for(const b of document.querySelectorAll('[data-xor]'))b.setAttribute('aria-pressed',String(b.dataset.xor===k))}
+for(const b of document.querySelectorAll('[data-xor]'))b.addEventListener('click',()=>{const [a,bb]=b.dataset.xor.split(',');setXor(a,bb)});
+const num=(v,d)=>typeof v==='number'&&isFinite(v)?v.toFixed(d):'—';
+function afterNeural(){
+  const d=layerData.neural,r=$('#neuralReadout');
+  if(!d){r.dataset.state='fail';$('#roPred').textContent='—';$('#roExp').textContent='—';$('#roMeta').textContent=layerErr.neural||'Yükleniyor…';if(layerErr.neural)setSt('torch','fail','FAILED',layerErr.neural);$('#neuralInfo').replaceChildren();return}
+  const trained=d.trained===true,a=xor.a,b=xor.b;
+  const pred=typeof d.prediction==='number'?d.prediction.toFixed(3):'—';
+  const cls=d.predicted_class!==undefined&&d.predicted_class!==null?String(d.predicted_class):'—';
+  const exp=d.expected!==undefined&&d.expected!==null?String(d.expected):String(Number(a)^Number(b));
+  const meta=[d.backend!==undefined?String(d.backend):null,d.epochs!==undefined?d.epochs+' adım':null,'kayıp '+num(d.loss,4),'max hata '+num(d.max_error,4)].filter(Boolean).join(' · ');
+  const match=cls!=='—'&&cls===exp;
+  r.dataset.state=trained&&match?'ok':'fail';$('#roPred').textContent=cls+' ('+pred+')';$('#roExp').textContent=exp;
+  $('#roMeta').textContent=(trained?(match?'✓ doğru':'✕ yanlış tahmin'):'✕ FAILED: eğitilmemiş')+' · '+meta;
+  setSt('torch',trained?'ok':'fail',trained?'Eğitilmiş':'FAILED','arka uç: '+meta);
+  if(lastTrained!==trained&&!trained)feed('Sinir ağı FAILED: eğitilmemiş veya yakınsamadı ('+meta+')','fail',true);lastTrained=trained;
+  if(neuralMounted){try{AxisNeural.update(d)}catch(e){neuralError(e);return}$('#neuralInfo').replaceChildren()}
+  else if(neuralFailed||pane==='neural')renderNeuralInfo(d,pred,cls,exp,trained);
+}
+/* Fallback detail when neural.js is unavailable (also lists unknown fields as plain text). */
+const NEURAL_KNOWN=new Set(['available','trained','architecture','description','nodes','edges','parameter_count','inputs','prediction','examples','reason','error','backend','epochs','loss','max_error','predicted_class','expected','weights','framework','backend_note','converged','seed','learning_rate','optimizer','loss_fn','activation_fns','training_ms']);
 function renderNeuralInfo(d,pred,cls,exp,trained){
-  const box=$('#details');box.replaceChildren();box.append(el('strong','',trained?'Eğitilmiş XOR ağı':'XOR ağı — EĞİTİLMEMİŞ'));if(d.description)box.append(el('p','',d.description));
-  if(d.backend_note)box.append(el('p','',d.backend_note));
+  if(neuralMounted)return;const box=$('#neuralInfo');box.replaceChildren();
+  if(d.description)box.append(el('p','note',d.description));if(d.backend_note)box.append(el('p','note',d.backend_note));
   const dl=el('dl','kv');const row=(k,v)=>{if(v!==undefined&&v!==null&&v!=='')dl.append(el('dt','',k),el('dd','',v))};
   row('Arka uç',d.backend);row('Çerçeve',d.framework);
   if(Array.isArray(d.architecture))row('Mimari',d.architecture.join(' → '));
   if(Array.isArray(d.inputs))row('Girdi',d.inputs.join(', '));
-  row('Tahmin / beklenen',cls+' / '+exp+'  ('+pred+')');row('Eğitildi',d.trained===undefined?undefined:String(d.trained));row('Yakınsadı',d.converged===undefined?undefined:String(d.converged));
+  row('Eğitildi',d.trained===undefined?undefined:String(d.trained));row('Yakınsadı',d.converged===undefined?undefined:String(d.converged));
   row('Adım (epoch)',d.epochs);row('Kayıp',typeof d.loss==='number'?d.loss.toFixed(6):d.loss);row('Max hata',typeof d.max_error==='number'?d.max_error.toFixed(6):d.max_error);
   row('Optimizasyon',d.optimizer);row('Öğrenme oranı',d.learning_rate);row('Kayıp fonksiyonu',d.loss_fn);
   if(d.activation_fns!==undefined)row('Aktivasyonlar',Array.isArray(d.activation_fns)?d.activation_fns.join(', '):typeof d.activation_fns==='object'?JSON.stringify(d.activation_fns):d.activation_fns);
   row('Tohum (seed)',d.seed);row('Eğitim süresi',typeof d.training_ms==='number'?d.training_ms.toFixed(1)+' ms':d.training_ms);
   if(d.parameter_count!==undefined)row('Parametre',d.parameter_count);
-  if(d.weights&&typeof d.weights==='object')row('Ağırlık matrisleri',Object.keys(d.weights).join(', '));
-  /* unknown extra fields are shown as plain text */
   for(const [k,v] of Object.entries(d)){if(NEURAL_KNOWN.has(k))continue;if(v===null||['string','number','boolean'].includes(typeof v))row(k,String(v));else if(Array.isArray(v)&&v.every(x=>x===null||typeof x!=='object'))row(k,v.join(', '));else row(k,JSON.stringify(v).slice(0,200))}
   box.append(dl);
-  if(Array.isArray(d.examples)&&d.examples.length){const t=el('table','xor-table');const cap=el('caption','visually-hidden','XOR doğruluk tablosu');const hr=el('tr');for(const h of ['Girdi','Beklenen','Tahmin'])hr.append(el('th','',h));const th=el('thead');th.append(hr);const tb=el('tbody');for(const x of d.examples){const tr=el('tr');tr.append(el('td','',Array.isArray(x.input)?x.input.join(' ⊕ '):x.input),el('td','',x.expected),el('td','',x.prediction));tb.append(tr)}t.append(cap,th,tb);box.append(t)}
+  if(Array.isArray(d.examples)&&d.examples.length){const t=el('table','xor-table');const cap=el('caption','vh','XOR doğruluk tablosu');const hr=el('tr');for(const h of ['Girdi','Beklenen','Tahmin'])hr.append(el('th','',h));const th=el('thead');th.append(hr);const tb=el('tbody');for(const x of d.examples){const tr=el('tr');tr.append(el('td','',Array.isArray(x.input)?x.input.join(' ⊕ '):x.input),el('td','',x.expected),el('td','',x.prediction));tb.append(tr)}t.append(cap,th,tb);box.append(t)}
 }
-$('#xorA').addEventListener('change',()=>showNeural().catch(()=>{}));
-$('#xorB').addEventListener('change',()=>showNeural().catch(()=>{}));
-for(const b of document.querySelectorAll('[data-xor]'))b.addEventListener('click',()=>{const [a,bb]=b.dataset.xor.split(',');$('#xorA').value=a;$('#xorB').value=bb;showNeural().catch(()=>{})});
+
+/* ----- generic node inspector ----- */
+let nodeSeq=0;
+function rawId(info){const r=info&&info.raw;if(r&&(r.id!==undefined||r.name!==undefined||r.key!==undefined))return String(r.id!==undefined?r.id:r.name!==undefined?r.name:r.key);const s=String(info.id||'');const i=s.indexOf(':');return LAYERS.includes(s.slice(0,i))?s.slice(i+1):s}
+function showNode(info){
+  const seq=++nodeSeq,box=$('#pane-node');box.replaceChildren();showPane('node',info.label||'Düğüm');
+  const head=el('div','xor-in');const lay=el('span','lay',LAYER_TR[info.layer]||info.layer||'—');lay.dataset.layer=info.layer||'';head.append(lay);if(info.kind)head.append(el('span','pill',info.kind));box.append(head);
+  box.append(el('p','node-title',info.label||rawId(info)));
+  if(info.description)box.append(el('p','node-desc',String(info.description).slice(0,1200)));
+  const nb=Array.isArray(info.neighbors)?info.neighbors:[];
+  if(nb.length){box.append(el('h3','sub-h','Komşular ('+nb.length+')'));const ul=el('ul','nb-list');
+    for(const n of nb.slice(0,40)){const li=el('li'),b=el('button','ghost');b.type='button';const l=el('span','lay',n.label||n.id);l.dataset.layer=n.layer||'';b.append(l);if(n.relation)b.append(el('span','rel',n.relation));b.title='Odaklan: '+(n.label||n.id);b.addEventListener('click',()=>graphFocus(n.id));li.append(b);ul.append(li)}box.append(ul)}
+  if(info.layer!=='knowledge')return;
+  const src=el('div','insp-pane');src.append(el('h3','sub-h','Kaynaklar'),el('p','loading','Yükleniyor…'));box.append(src);
+  (async()=>{try{const res=await fetch('/api/sources?node='+encodeURIComponent(rawId(info))),data=await res.json();if(seq!==nodeSeq)return;src.lastChild.remove();
+    if(!Array.isArray(data)||!data.length)src.append(el('p','empty','Doğrudan bağlı kaynak yok. Bağlantılı makaleleri incele.'));
+    else for(const s of data){const div=el('div','source');const title=String(s.title||'Başlıksız')+' ('+(s.year||'t.y.')+')';const url=String(s.url||'');
+      if(/^https:\/\/[^\s]+$/i.test(url)){const a=el('a','',title);a.href=url;a.target='_blank';a.rel='noopener noreferrer';div.append(a)}else div.append(el('strong','',title));
+      div.append(el('p','',s.quote||'Özet bulunamadı'));src.append(div)}
+  }catch(err){if(seq===nodeSeq){src.lastChild.remove();src.append(el('p','empty','Kaynaklar yüklenemedi'))}}})();
+}
+/* Select a knowledge node by raw id (from an answer's memory list). */
+async function selectNodeById(id){
+  switchTab('ag');if(!layerData.knowledge)await loadNetwork();
+  const g=layerData.knowledge||{nodes:[],edges:[]},n=(g.nodes||[]).find(x=>String(x.id)===id);
+  if(!n){feed('Düğüm grafikte görünmüyor (yalnızca son 500 düğüm çizilir): '+id,'warn',true);toast('Düğüm ağda görünmüyor','warn');return}
+  const label=new Map((g.nodes||[]).map(x=>[String(x.id),x.label]));
+  const neighbors=(g.edges||[]).filter(e=>String(e.source)===id||String(e.target)===id).map(e=>{const o=String(e.source)===id?String(e.target):String(e.source);return {id:'knowledge:'+o,label:label.get(o)||o,layer:'knowledge',relation:e.relation}});
+  showNode({id:'knowledge:'+id,layer:'knowledge',label:n.label,kind:n.kind,description:n.description,neighbors,raw:n});
+  graphFocus('knowledge:'+id);
+}
+function focusLayer(name){switchTab('ag');if(name==='neural')openNeural();graphFocus(name)}
+$('#xorBtn').addEventListener('click',()=>{openNeural();graphFocus('neural')});
+$('#agRefresh').addEventListener('click',()=>loadNetwork());
 
 /* ---------------- Automatic read-only refresh ---------------- */
 let lastNodeCount=null,jobSeen=null;
 function renderJobs(jobs){
   const root=$('#jobs');root.replaceChildren();const next=new Map();let running=0,failed=0;
   for(const j of jobs){const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${j.details}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
-    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed')feed('Araştırma tamamlandı: '+j.topic+' — '+j.details,'ok',true);else if(j.status==='failed')feed('Araştırma FAILED: '+j.topic+' — '+j.details,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
-  if(!jobs.length)root.append(el('p','empty','Henüz araştırma yok. Komut satırına bir konu yaz.'));
+    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+j.details,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok')}else if(j.status==='failed')feed('Araştırma FAILED: '+j.topic+' — '+j.details,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
+  if(!jobs.length)root.append(el('p','empty','Henüz araştırma yok.'));
   jobSeen=next;
   setSt('jobs',failed?'fail':running?'warn':jobs.length?'ok':'notrun',running?running+' çalışıyor':jobs.length?'Boşta':'NOT RUN',failed?failed+' FAILED (son 15)':jobs.length?jobs.length+' kayıt':'Henüz iş yok');
 }
 async function reload(){
   try{const s=await getJSON('/api/status');renderJobs(Array.isArray(s.jobs)?s.jobs:[]);
     const nc=typeof s.nodes==='number'?s.nodes:null;setSt('nodes',nc?'ok':'notrun',nc===null?'—':String(nc),nc?'':'Bilgi ağı boş');
-    if(mode==='knowledge'&&nc!==lastNodeCount)await loadGraph();lastNodeCount=nc;stamp();
+    if(lastNodeCount!==null&&nc!==lastNodeCount){if(currentTab==='ag')loadNetwork();else netStale=true}
+    lastNodeCount=nc;stamp();
     return (s.jobs||[]).some(j=>j.status==='running');
   }catch(e){$('#msg').textContent='Sunucu bağlantısı kurulamadı';return false}
 }
@@ -781,7 +519,7 @@ async function refreshProposals(){try{const data=await getJSON('/api/proposals')
 function v5show(x){$('#v5out').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
 /* Core upgrades are applied automatically ONLY after a passing isolated Docker test (server-side,
    kill switch AXIS_AUTO_APPLY=0). The UI has no approve button for them: it shows the diff, lets the
-   user reject a pending item whose test failed, and keeps per-item rollback (confirm + rollback phrase). */
+   user reject a pending item whose test failed, and keeps per-item rollback (confirmation + rollback phrase). */
 let restartNeeded=false;
 function markRestart(){restartNeeded=true;$('#restartNote').hidden=false}
 async function rollbackUpgrade(item,show){if(!confirm('Bu güncellemeyi geri almak istiyor musun? ('+item.target+')'))return;const r=await v5request('/api/upgrade-rollback',{id:item.id,confirmation:'GERI_AL'});show(r);markRestart();feed('Güncelleme geri alındı: '+item.target+' — yeniden başlatma gerekli','warn',true);v5list()}
@@ -800,12 +538,12 @@ async function refreshAuto(){try{const a=await getJSON('/api/upgrade-auto');cons
   m.textContent='Otomatik güncelleme: '+(on?'açık':'kapalı');m.dataset.state=on?'ok':'warn';
   setSt('autoupd',on?'ok':'notrun',on?'Açık':'Kapalı',on?'PASS ise uygulanır':'AXIS_AUTO_APPLY=0');
   const evs=Array.isArray(a.events)?a.events:[];
-  if(autoSeen){for(const e of evs.slice().reverse())if(!autoSeen.has(e.id)){if(e.outcome==='applied'){feed('Otomatik uygulandı: '+e.target+' — '+(e.description||'')+' · yeniden başlatma gerekli','ok',true);markRestart()}else feed('Otomatik uygulanmadı: '+e.target+' — '+(e.detail||''),'fail',true)}}
+  if(autoSeen){for(const e of evs.slice().reverse())if(!autoSeen.has(e.id)){if(e.outcome==='applied'){feed('Otomatik uygulandı: '+e.target+' — '+(e.description||'')+' · yeniden başlatma gerekli','ok',true);toast('Otomatik uygulandı: '+e.target,'ok');markRestart()}else feed('Otomatik uygulanmadı: '+e.target+' — '+(e.detail||''),'fail',true)}}
   autoSeen=new Set(evs.map(e=>e.id));
   const root=$('#apAuto');root.replaceChildren();const done=new Set();
   for(const e of evs){if(e.outcome!=='applied'||done.has(e.upgrade_id))continue;done.add(e.upgrade_id);
     root.append(upgradeRow({id:e.upgrade_id,target:e.target,description:e.description,status:e.upgrade_status||'applied',report:'PASS'},updShow,'auto'));if(done.size>=8)break}
-  if(!done.size)root.append(el('p','empty','Henüz otomatik güncelleme yok.'));
+  if(!done.size)root.append(el('p','empty','Henüz yok.'));
 }catch(e){setSt('autoupd','unknown','—',e.message)}}
 async function v5propose(){try{const x=await v5request('/api/upgrade-propose',{target:$('#v5target').value,code:$('#v5code').value,description:$('#v5desc').value});v5show(x);feed('Güncelleme önerisi oluşturuldu: '+(x.auto_apply_queued?'Docker testi sırada; PASS ise otomatik uygulanır':'otomatik uygulama kapalı, beklemede'),'warn',true);v5list()}catch(e){v5show(e.message)}}
 async function v5list(){try{const items=await getJSON('/api/upgrades'),root=$('#v5items'),rail=$('#apUpgrade');root.replaceChildren();rail.replaceChildren();let n=0;
@@ -844,7 +582,7 @@ async function brainLoad(){try{const [e,s]=await Promise.all([brainReq('/api/bra
 async function brainPending(){try{const s=await brainReq('/api/brain-skills');const rail=$('#apBrain');rail.replaceChildren();let n=0;for(const skill of s)if(skill.status==='pending'){rail.append(brainRow(skill,updShow));n++}pend.brain=n;updatePending()}catch(e){/* shown on next manual load */}}
 async function brainSuggest(){try{brainOut(await brainReq('/api/brain-discover'))}catch(e){brainOut(e.message)}}
 async function brainPropose(){try{brainOut(await brainReq('/api/brain-propose',{name:$('#brainName').value,steps:$('#brainSteps').value.split(',').map(x=>x.trim()),evidence_ids:$('#brainEvidence').value.split(',').map(x=>x.trim())}));feed('Kanıtlı beceri önerildi (onay bekliyor)','warn');brainLoad();brainPending()}catch(e){brainOut(e.message)}}
-async function brainVisualize(){try{switchTab('memory');await setMode('skills');brainOut({nodes:nodes.length,edges:edges.length})}catch(e){brainOut(e.message)}}
+async function brainVisualize(){try{await loadNetwork();focusLayer('skills');const g=layerData.skills;brainOut(g?{nodes:nodeCount(g),edges:Array.isArray(g.edges)?g.edges.length:0}:{error:layerErr.skills||'yok'})}catch(e){brainOut(e.message)}}
 
 /* ---------------- Learned skill runner (V11) ---------------- */
 async function axisList(){const out=$('#axisOutput'),root=$('#axisSkills');try{const skills=await getJSON('/api/brain-skills');root.replaceChildren();
@@ -859,20 +597,19 @@ function v4generate(){return v4show(()=>v4post('/api/generate-skill',{skill:$('#
 function v4parallel(){return v4show(()=>v4post('/api/parallel',{tasks:[{tool:'count_nodes'},{tool:'list_recent_research'},{tool:'search_memory',args:{query:$('#v4query').value}}]}))}
 function v4upload(){return v4show(async()=>{const f=$('#v4pdf').files[0];if(!f)throw Error('PDF seç');if(f.size>8000000)throw Error('8 MB sınırı');const b64=await new Promise((ok,fail)=>{const reader=new FileReader();reader.onload=()=>ok(reader.result.split(',')[1]);reader.onerror=fail;reader.readAsDataURL(f)});return v4post('/api/pdf',{filename:f.name,content_base64:b64})})}
 
-/* ---------------- Learning graph 2D (V13) ---------------- */
-const v13svg=$('#axis-v13-graph'),v13summary=$('#axis-v13-summary');let v13Seen=null;
-async function v13Update(){try{
+/* ---------------- Learning layer (V13 dashboard) ---------------- */
+let v13Seen=null;
+async function v13Update(){
   const r=await fetch('/api/axis-v13-dashboard');if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();
-  const evs=Array.isArray(d.events)?d.events:[],les=Array.isArray(d.lessons)?d.lessons:[],dn=Array.isArray(d.nodes)?d.nodes:[],de=Array.isArray(d.edges)?d.edges:[];
-  v13summary.textContent='Olay: '+evs.length+' · Ders: '+les.length+' · Düğüm: '+dn.length;
+  const evs=Array.isArray(d.events)?d.events:[];
   const ids=new Set(evs.map(e=>e.id));if(v13Seen){for(const e of evs.slice(0,5).reverse())if(!v13Seen.has(e.id))feed('Öğrenme olayı: '+[e.agent,e.tool||e.kind,e.outcome].filter(Boolean).join(' · '),e.outcome==='failure'?'fail':'info')}v13Seen=ids;
-  v13svg.replaceChildren();const ns='http://www.w3.org/2000/svg',list=dn.slice(0,50),coords={};
-  for(let i=1;i<=3;i++){const ring=document.createElementNS(ns,'ellipse');ring.setAttribute('cx',350);ring.setAttribute('cy',145);ring.setAttribute('rx',85*i);ring.setAttribute('ry',37*i);ring.setAttribute('fill','none');ring.setAttribute('stroke','rgba(95,212,244,.08)');v13svg.appendChild(ring)}
-  list.forEach((n,i)=>{const a=2*Math.PI*i/Math.max(list.length,1);coords[n.id]=[350+250*Math.cos(a),145+110*Math.sin(a)]});
-  de.slice(0,100).forEach(e=>{if(!coords[e.source]||!coords[e.target])return;const l=document.createElementNS(ns,'line');l.setAttribute('x1',coords[e.source][0]);l.setAttribute('y1',coords[e.source][1]);l.setAttribute('x2',coords[e.target][0]);l.setAttribute('y2',coords[e.target][1]);l.setAttribute('stroke','rgba(120,170,210,.35)');v13svg.appendChild(l)});
-  list.forEach(n=>{const ci=document.createElementNS(ns,'circle');ci.setAttribute('cx',coords[n.id][0]);ci.setAttribute('cy',coords[n.id][1]);ci.setAttribute('r',n.kind==='agent'?9:5);ci.setAttribute('fill',n.kind==='agent'?'#38bdf8':n.kind==='lesson'?'#f59e0b':'#a78bfa');const t=document.createElementNS(ns,'title');t.textContent=n.kind+': '+n.label;ci.appendChild(t);v13svg.appendChild(ci)});
-  if(!list.length){const t=document.createElementNS(ns,'text');t.setAttribute('x',350);t.setAttribute('y',150);t.setAttribute('text-anchor','middle');t.setAttribute('fill','#a6c2d9');t.setAttribute('font-size','15');t.textContent='Henüz öğrenme olayı yok';v13svg.appendChild(t)}
-}catch(e){v13summary.textContent='Öğrenme paneli: '+e.message}}
+  return d;
+}
+async function v13Tick(){
+  try{const d=await v13Update(),old=layerData.learning;layerData.learning=d;const was=!!layerErr.learning;delete layerErr.learning;
+    if(was||!old||nodeCount(old)!==nodeCount(d)||(old.edges||[]).length!==(d.edges||[]).length){pushLayers();renderLayerState()}}
+  catch(e){if(!layerErr.learning){layerErr.learning=e.message;layerData.learning=null;pushLayers();renderLayerState()}}
+}
 
 /* =====================================================================
    Command bar — transparent client-side intent rules
@@ -880,7 +617,7 @@ async function v13Update(){try{
 function norm(s){return s.toLocaleLowerCase('tr').replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s').replace(/ö/g,'o').replace(/ç/g,'c').replace(/â/g,'a').replace(/î/g,'i').replace(/û/g,'u')}
 /* Requests to DO something (apply, approve, fix, install …). Mirrors vector_intelligence.ACTION_RE; answered locally, never sent. */
 const ACTION_RE=/(^|\s)(uygula|uygulayin|uygular misin|onayla|onaylayin|reddet|geri al|calistir|kur|yukle|sil|duzelt|guncelle|degistir|deploy et|commit et|push et|merge et)\s*[.!]*$/;
-const ACTION_TEXT='AXIS bunu komut satırından yapmaz: buradan hiçbir güncelleme, düzeltme, kurulum, onay veya dosya değişikliği uygulanmaz.\n\n• Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa sunucu tarafından otomatik uygulanır; durumları, farkları ve «Geri al» «Güncellemeler» sekmesinde.\n• Beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler aynı sekmede senin onayını bekler.\n\nBir değişikliğin ne yapacağını soru olarak sorabilirsin.';
+const ACTION_TEXT='AXIS bunu komut satırından yapmaz: buradan hiçbir güncelleme, düzeltme, kurulum, onay veya dosya değişikliği uygulanmaz.\n\n• Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa sunucu tarafından otomatik uygulanır; durumları, farkları ve «Geri al» «Güncellemeler» bölümünde.\n• Beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler aynı bölümde senin onayını bekler.\n\nBir değişikliğin ne yapacağını soru olarak sorabilirsin.';
 const MAX_Q=2000;
 /* Research command parsing (pure; tested with node). n = norm(text); returns null (not a research command) or {topic,limit} or {error}.
    «araştır 100 konu» (number right after the verb) · «konu hakkında 30 makale» · «araştır konu 30 kayıt». No number → 50. Valid 1..200. */
@@ -907,11 +644,11 @@ function parseIntent(raw){
   if(/^(durum|saglik|sistem( durumu)?|kontrol|status)$/.test(n))return {name:'Sistem durumu',path:'GET /api/agent-health · /api/status',run:cmdHealth};
   if(/^(oneriler|oneri|onay|onaylar|bekleyenler|bekleyen|guncellemeler)$/.test(n))return {name:'Güncellemeler ve bekleyen öneriler',path:'GET /api/upgrades · /api/proposals …',run:cmdApprovals};
   if(/^(sinir agi|sinir|noral|neural|xor)\b/.test(n)&&!/\?$/.test(n)){const a=(m=n.match(/\ba\s*=\s*([01])\b/))?m[1]:null,b=(m=n.match(/\bb\s*=\s*([01])\b/))?m[1]:null;const bare=n.replace(/\b[ab]\s*=\s*[01]\b/g,'').match(/\b([01])\s+([01])\b/);const A=a!==null?a:bare?bare[1]:null,B=b!==null?b:bare?bare[2]:null;
-    if(/^(sinir agi|sinir|noral|neural|xor)(\s+[ab]?\s*=?\s*[01])*\s*$/.test(n))return {name:'Sinir ağı'+(A!==null||B!==null?' (a='+(A!==null?A:$('#xorA').value)+', b='+(B!==null?B:$('#xorB').value)+')':''),path:'GET /api/neural',run:()=>cmdNeural(A,B)}}
-  if(/^(bilgi agi|graf|harita)$/.test(n))return {name:'Bilgi ağı',path:'GET /api/graph',run:()=>{switchTab('memory');return setMode('knowledge')}};
-  if(/^(beceri agi|beceri grafigi|beceriler)$/.test(n))return {name:'Beceri ağı',path:'GET /api/brain-graph',run:()=>{switchTab('memory');return setMode('skills')}};
-  if(/^(ogrenme|ogrenme grafigi)$/.test(n))return {name:'Öğrenme grafiği',path:'GET /api/axis-v13-dashboard',run:()=>{switchTab('memory');return setMode('learning')}};
-  if(/^(gelismis|araclar|ayarlar)$/.test(n))return {name:'Araçlar',path:'yerel',run:async()=>switchTab('tools')};
+    if(/^(sinir agi|sinir|noral|neural|xor)(\s+[ab]?\s*=?\s*[01])*\s*$/.test(n))return {name:'Sinir ağı'+(A!==null||B!==null?' (a='+(A!==null?A:xor.a)+', b='+(B!==null?B:xor.b)+')':''),path:'GET /api/neural',run:()=>cmdNeural(A,B)}}
+  if(/^(bilgi agi|graf|harita)$/.test(n))return {name:'Bilgi ağı',path:'GET /api/graph',run:async()=>focusLayer('knowledge')};
+  if(/^(beceri agi|beceri grafigi|beceriler)$/.test(n))return {name:'Beceri ağı',path:'GET /api/brain-graph',run:async()=>focusLayer('skills')};
+  if(/^(ogrenme|ogrenme grafigi)$/.test(n))return {name:'Öğrenme grafiği',path:'GET /api/axis-v13-dashboard',run:async()=>focusLayer('learning')};
+  if(/^(ag|gelismis|araclar|ayarlar)$/.test(n))return n==='ag'?{name:'Ağ',path:'yerel',run:async()=>switchTab('ag')}:{name:'Araçlar',path:'yerel',run:async()=>switchTab('tools')};
   if((m=n.match(/^(hafizada ara|hafiza)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Hafızada ara: «'+q+'»',path:'POST /api/parallel (salt-okunur)',run:()=>cmdMemory(q)}}
   if((m=n.match(/^(sentezle|sentez|ozetle)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Literatür sentezi: «'+q+'»',path:'POST /api/synthesize (yerel model)',run:()=>cmdSynth(q)}}
   /* Literature search ONLY on an explicit request. */
@@ -924,15 +661,18 @@ function parseIntent(raw){
   return {name:'Soru — yerel model yanıtlar',path:'POST /api/ask ('+(text.length>MAX_Q?'ÇOK UZUN':'yerel Ollama')+')',run:()=>cmdAsk(text)};
 }
 function showIntent(it){$('#intentName').textContent=it?it.name:'—';$('#intentPath').textContent=it?'→ '+it.path:''}
-$('#cmdInput').addEventListener('input',e=>showIntent(parseIntent(e.target.value)));
+const cmdInput=$('#cmdInput');
+function autogrow(){cmdInput.style.height='auto';cmdInput.style.height=Math.min(cmdInput.scrollHeight,6*21+16)+'px'}
+cmdInput.addEventListener('input',e=>{autogrow();showIntent(parseIntent(e.target.value))});
+cmdInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();submitCmd()}});
+function submitCmd(){const f=$('#cmd');if(f.requestSubmit)f.requestSubmit();else $('#cmdGo').click()}
 $('#cmd').addEventListener('submit',async e=>{
-  e.preventDefault();const input=$('#cmdInput'),it=parseIntent(input.value);if(!it)return;
+  e.preventDefault();const input=cmdInput,it=parseIntent(input.value);if(!it)return;
   showIntent(it);feed('Seçilen eylem: '+it.name+' → '+it.path,'info');
   const go=$('#cmdGo');go.disabled=true;
-  try{await it.run();input.value=''}catch(err){feed(it.name+': '+err.message,'fail',true);localAnswer(input.value.trim(),err.message,'FAILED','failed')}finally{go.disabled=false}
+  try{await it.run();input.value='';autogrow()}catch(err){feed(it.name+': '+err.message,'fail',true);localAnswer(input.value.trim(),err.message,'FAILED','failed')}finally{go.disabled=false}
 });
-for(const b of document.querySelectorAll('[data-cmd]'))b.addEventListener('click',()=>{const i=$('#cmdInput');i.value=b.dataset.cmd;showIntent(parseIntent(i.value));if(b.dataset.fill){i.focus();return}$('#cmd').requestSubmit?$('#cmd').requestSubmit():$('#cmdGo').click()});
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();switchTab('chat');$('#cmdInput').focus()}});
+for(const b of document.querySelectorAll('[data-cmd]'))b.addEventListener('click',()=>{const i=cmdInput;i.value=b.dataset.cmd;autogrow();showIntent(parseIntent(i.value));if(b.dataset.fill){i.focus();return}submitCmd()});
 
 /* ---------------- Questions & answers (POST /api/ask, polled every 2 s while visible) ---------------- */
 const asks=[];/* newest first: {q,id,status:'running'|'completed'|'failed'|'local',started,result,error,label,lastPoll} */
@@ -940,7 +680,7 @@ const asks=[];/* newest first: {q,id,status:'running'|'completed'|'failed'|'loca
 function plain(s){return String(s||'').replace(/\*\*([^*\n]+)\*\*/g,'$1').replace(/^#{1,6}\s+/gm,'')}
 function secs(e){return Math.max(0,Math.round(((e.finished||Date.now())-e.started)/1000))}
 function renderAsks(){
-  const e=asks[0],box=$('#answer');if(!e){box.hidden=true;return}
+  const e=asks[0],box=$('#answer');$('#chatEmpty').hidden=!!e;if(!e){box.hidden=true;return}
   box.hidden=false;box.dataset.state=e.status;$('#answerQ').textContent=e.q;
   const st=$('#answerState'),wait=$('#answerWait'),spin=st.querySelector('.spinner'),txt=$('#answerText'),meta=$('#answerMeta');
   meta.replaceChildren();txt.textContent='';
@@ -948,15 +688,15 @@ function renderAsks(){
   else if(e.status==='failed'){st.hidden=false;spin.hidden=true;wait.textContent='✕ FAILED · '+(e.error||'bilinmeyen hata')}
   else{st.hidden=true;txt.textContent=e.status==='local'?e.text:plain(e.result.answer);
     if(e.status==='local'){meta.append(el('span','pill',e.label||'Yerel yanıt'),el('span','','sunucuya gönderilmedi'))}
-    else{const r=e.result;if(r.action_refused)meta.append(el('span','pill','Eylem yapılmadı'));else if(r.model)meta.append(el('span','pill',r.model));
-      if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Düğümü seç: '+m.id;meta.append(b)}}
+    else{const r=e.result;if(r.action_refused){const p=el('span','pill','Eylem yapılmadı');p.dataset.state='warn';p.title='AXIS sohbetten hiçbir değişiklik uygulamaz; güncellemeler «Güncellemeler» bölümünde.';meta.append(p)}else if(r.model)meta.append(el('span','pill',r.model));
+      if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Ağda göster: '+m.id;meta.append(b)}}
       else if(r.general_knowledge){const g=el('span','pill','genel bilgi');g.dataset.state='warn';g.title='Bellekte ilgili kayıt bulunamadı; yanıt modelin genel bilgisinden.';meta.append(g)}
       meta.append(el('span','',(typeof r.elapsed_s==='number'?r.elapsed_s.toFixed(1):secs(e))+' sn'))}}
   const hist=$('#askHistory');hist.replaceChildren();
-  for(const h of asks.slice(1)){const li=el('li');li.dataset.state=h.status;const a=h.status==='running'?'… bekleniyor ('+secs(h)+' sn)':h.status==='failed'?'FAILED · '+(h.error||''):String(h.status==='local'?h.text:plain(h.result.answer));li.append(el('div','h-q',h.q),el('div','h-a',a.length>280?a.slice(0,280)+'…':a));hist.append(li)}
+  for(const h of asks.slice(1).reverse()){const li=el('li');li.dataset.state=h.status;const a=h.status==='running'?'… bekleniyor ('+secs(h)+' sn)':h.status==='failed'?'FAILED · '+(h.error||''):String(h.status==='local'?h.text:plain(h.result.answer));li.append(el('div','h-q',h.q),el('div','h-a',a.length>280?a.slice(0,280)+'…':a));hist.append(li)}
   $('#historyWrap').hidden=asks.length<2;
 }
-function pushAsk(entry){asks.unshift(entry);while(asks.length>6)asks.pop();switchTab('chat');renderAsks()}
+function pushAsk(entry){asks.unshift(entry);while(asks.length>6)asks.pop();switchTab('chat');renderAsks();requestAnimationFrame(()=>$('#answer').scrollIntoView({block:'nearest',behavior:RM.matches?'auto':'smooth'}))}
 function localAnswer(q,text,label,status){pushAsk({q,status:status||'local',text,error:status==='failed'?text:null,label,started:Date.now(),finished:Date.now()})}
 async function cmdAsk(q){
   if(q.length>MAX_Q)throw Error('Soru en fazla '+MAX_Q+' karakter olabilir');
@@ -968,7 +708,7 @@ async function pollAsk(entry){
   entry.lastPoll=Date.now();
   try{const r=await fetch('/api/ask-result?id='+encodeURIComponent(entry.id));const j=await readJSON(r);
     if(!r.ok){entry.status='failed';entry.error=(j&&j.error)||('HTTP '+r.status)}
-    else if(j.status==='completed'){entry.status='completed';entry.result=j;feed('Yanıt hazır ('+(j.elapsed_s||'?')+' sn)'+(j.general_knowledge?' · genel bilgi':''),'ok')}
+    else if(j.status==='completed'){entry.status='completed';entry.result=j;feed('Yanıt hazır ('+(j.elapsed_s||'?')+' sn)'+(j.general_knowledge?' · genel bilgi':''),'ok');if(currentTab!=='chat')toast('Yanıt hazır','ok')}
     else if(j.status==='failed'){entry.status='failed';entry.error=j.error;feed('Soru FAILED: '+j.error,'fail')}
     if(entry.status!=='running')entry.finished=Date.now();
   }catch(e){/* transient; retried on the next tick */}
@@ -977,9 +717,9 @@ setInterval(()=>{const running=asks.filter(a=>a.status==='running');if(!running.
   if(!document.hidden)for(const a of running)if(a.id&&Date.now()-a.lastPoll>=2000)pollAsk(a).then(renderAsks);
   renderAsks()},1000);
 
-async function cmdHealth(){const [h]=await Promise.all([getJSON('/api/agent-health'),refreshHealth(),reload()]);showOut(h);const t='Ollama '+(h.ollama_reachable?'erişilebilir':'erişilemiyor')+' · PyTorch '+(h.torch_installed?'kurulu':'yok')+' · Docker: '+$('#st-docker .st-val').textContent;feed('Durum: '+t,h.ollama_reachable?'ok':'warn');localAnswer('durum',t+'\nAyrıntılar «Sistem» sekmesinde.','Durum')}
+async function cmdHealth(){const [h]=await Promise.all([getJSON('/api/agent-health'),refreshHealth(),reload()]);showOut(h);const t='Ollama '+(h.ollama_reachable?'erişilebilir':'erişilemiyor')+' · PyTorch '+(h.torch_installed?'kurulu':'yok')+' · Docker: '+$('#st-docker .st-val').textContent;feed('Durum: '+t,h.ollama_reachable?'ok':'warn');localAnswer('durum',t+'\nAyrıntılar «Sistem» bölümünde.','Durum')}
 async function cmdApprovals(){await refreshApprovals();const n=pend.skill+pend.upgrade+pend.agent+pend.brain;feed(n?n+' öneri bekliyor':'Bekleyen öneri yok',n?'warn':'ok',true);switchTab('updates');$('#approvals').focus({preventScroll:true})}
-async function cmdNeural(A,B){switchTab('neural');if(A!==null)$('#xorA').value=A;if(B!==null)$('#xorB').value=B;if(mode==='neural')await showNeural();else await setMode('neural');if(mode==='neural'&&nodes.length)feed('Sinir ağı çıktısı: '+$('#counts').textContent,'ok')}
+async function cmdNeural(A,B){switchTab('ag');openNeural();setXor(A!==null?A:xor.a,B!==null?B:xor.b);graphFocus('neural');if(layerData.neural)feed('Sinir ağı: a='+xor.a+', b='+xor.b,'ok')}
 async function cmdMemory(q){if(!q)throw Error('Aranacak kavramı yaz');const r=await postJSON('/api/parallel',{tasks:[{tool:'count_nodes'},{tool:'list_recent_research'},{tool:'search_memory',args:{query:q}}]});showOut(r);
   const hits=(r.find(x=>x.tool==='search_memory')||{}).result||[],cnt=(r.find(x=>x.tool==='count_nodes')||{}).result||{};
   localAnswer('hafızada ara '+q,(hits.length?hits.length+' eşleşme:\n'+hits.slice(0,10).map(h=>'• '+h.label+' ('+h.kind+')').join('\n'):'Etiketinde «'+q+'» geçen düğüm yok.')+'\n\nBellekte '+(cnt.nodes||0)+' düğüm, '+(cnt.edges||0)+' ilişki var.','Hafıza araması')}
@@ -990,56 +730,70 @@ async function cmdResearch(topic,limit){
   if(topic.length<3)throw Error('Konu en az 3 karakter olmalı');
   limit=limit||RESEARCH_DEFAULT;
   const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
-  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Bellek» sekmesinde görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
+  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
 }
-function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
+function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · beceri ağı · öğrenme · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 
-/* ---------------- Tabs, theme, wiring ---------------- */
-const TABS=['chat','neural','memory','updates','system','tools'];let currentTab='chat';
+/* ---------------- Navigation rail, hash routing, theme ---------------- */
+const TABS=['chat','ag','updates','system','tools'];
+const TAB_HASH={chat:'sohbet',ag:'ag',updates:'guncellemeler',system:'sistem',tools:'araclar'};
+const TITLES={chat:'Sohbet',ag:'Ağ',updates:'Güncellemeler',system:'Sistem',tools:'Araçlar'};
+let currentTab='chat';
+function tabFromHash(h){h=String(h||'').replace(/^#/,'');for(const [t,v] of Object.entries(TAB_HASH))if(v===h)return t;return null}
+function railButtons(){return [...document.querySelectorAll('#rail [data-tab]')]}
+function placeIndicator(){const b=railButtons().find(x=>x.dataset.tab===currentTab),ind=$('#railInd');if(!b||!ind)return;ind.style.setProperty('--ind-y',b.offsetTop+'px');ind.style.setProperty('--ind-x',(b.offsetLeft+(b.offsetWidth-28)/2)+'px')}
 function switchTab(t,focus){
+  if(t==='neural'||t==='memory')t='ag';/* old saved tabs */
   if(!TABS.includes(t))t='chat';const prev=currentTab;currentTab=t;
-  for(const b of document.querySelectorAll('[role=tab]')){const on=b.dataset.tab===t;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;if(on){if(focus)b.focus();b.scrollIntoView({block:'nearest',inline:'center'})}}
+  for(const b of railButtons()){const on=b.dataset.tab===t;if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');b.tabIndex=on?0:-1;if(on&&focus)b.focus()}
   for(const k of TABS)$('#panel-'+k).hidden=k!==t;
-  if(t==='neural'){$('#slot-neural').append($('#stage'));$('#memSeg').hidden=true;if(mode!=='neural')setMode('neural').catch(()=>{})}
-  if(t==='memory'){$('#slot-memory').append($('#stage'));$('#memSeg').hidden=false;if(mode==='neural')setMode('knowledge').catch(()=>{})}
+  $('#viewTitle').textContent=TITLES[t];document.title=TITLES[t]+' · AXIS';placeIndicator();
+  if(t==='ag'){if(!graphMounted&&!graphFailed){ensureGraph();pushLayers()}if(netStale||Date.now()-netLoadedAt>15000)loadNetwork()}
   if(t==='tools'&&prev!=='tools')brainLoad();
   try{localStorage.setItem('axis-tab',t)}catch(e){}
-  requestAnimationFrame(()=>{if(t==='neural'||t==='memory')resize()});
+  if(location.hash!=='#'+TAB_HASH[t])try{history.replaceState(null,'','#'+TAB_HASH[t])}catch(e){}
 }
-for(const b of document.querySelectorAll('[role=tab]'))b.addEventListener('click',()=>switchTab(b.dataset.tab));
-$('#tabs').addEventListener('keydown',e=>{const i=TABS.indexOf(currentTab);let j=null;
-  if(e.key==='ArrowRight')j=(i+1)%TABS.length;else if(e.key==='ArrowLeft')j=(i-1+TABS.length)%TABS.length;else if(e.key==='Home')j=0;else if(e.key==='End')j=TABS.length-1;
+for(const b of railButtons())b.addEventListener('click',()=>switchTab(b.dataset.tab));
+$('#rail').addEventListener('keydown',e=>{const i=TABS.indexOf(currentTab);let j=null;
+  if(e.key==='ArrowDown'||e.key==='ArrowRight')j=(i+1)%TABS.length;else if(e.key==='ArrowUp'||e.key==='ArrowLeft')j=(i-1+TABS.length)%TABS.length;else if(e.key==='Home')j=0;else if(e.key==='End')j=TABS.length-1;
   if(j!==null){e.preventDefault();switchTab(TABS[j],true)}});
-const ACTS={v4synth,v4upload,v4generate,v4parallel,proposeSkill,refreshProposals,v5propose,v5list,agentRun,agentList,v9scan,v9parallel,v9health,v9list,brainLoad,brainSuggest,brainVisualize,brainPropose,axisList};
-for(const b of document.querySelectorAll('[data-act]'))b.addEventListener('click',()=>{Promise.resolve(ACTS[b.dataset.act]()).catch(()=>{})});
-for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>setMode(b.dataset.mode).catch(()=>{}));
-$('#home').addEventListener('click',()=>{yaw=.25;pitch=.15;zoom=1;draw()});
-$('#rotate').addEventListener('click',()=>{setRotate(!auto);draw()});
+window.addEventListener('hashchange',()=>{const t=tabFromHash(location.hash);if(t&&t!==currentTab)switchTab(t)});
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.altKey)&&!e.shiftKey&&!e.metaKey&&/^[1-5]$/.test(e.key)){e.preventDefault();switchTab(TABS[+e.key-1],true);return}
+  if(e.key==='/'&&currentTab!=='ag'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();switchTab('chat');cmdInput.focus()}
+});
+/* rail width: user choice, else expanded only on wide screens */
+let railPref=null;try{const r=localStorage.getItem('axis-rail');if(r==='open'||r==='collapsed')railPref=r}catch(e){}
+function applyRail(){const open=railPref?railPref==='open':innerWidth>=1280;$('#shell').dataset.rail=open?'open':'collapsed';const t=$('#railToggle');t.setAttribute('aria-expanded',String(open));t.dataset.tip=open?'Menüyü daralt':'Menüyü genişlet';t.querySelector('.rail-label').textContent=open?'Daralt':'Genişlet';t.setAttribute('aria-label',open?'Menüyü daralt':'Menüyü genişlet');requestAnimationFrame(placeIndicator)}
+$('#railToggle').addEventListener('click',()=>{railPref=$('#shell').dataset.rail==='open'?'collapsed':'open';try{localStorage.setItem('axis-rail',railPref)}catch(e){}applyRail()});
+window.addEventListener('resize',()=>{if(!railPref)applyRail();else placeIndicator()});
 const THEMES=['auto','dark','light'],TL={auto:'Otomatik',dark:'Koyu',light:'Açık'};let theme='auto';
-try{const t=localStorage.getItem('axis-theme');if(THEMES.includes(t))theme=t}catch(e){}
-function applyTheme(){if(theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',theme);$('#themeBtn').textContent='◐ '+TL[theme];$('#themeBtn').title='Tema: '+TL[theme]}
-$('#themeBtn').addEventListener('click',()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%3];try{localStorage.setItem('axis-theme',theme)}catch(e){}applyTheme()});
-applyTheme();
+try{const t=localStorage.getItem('theme')||localStorage.getItem('axis-theme');if(THEMES.includes(t))theme=t}catch(e){}
+const DARKQ=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):{matches:false};
+function applyTheme(){const resolved=theme==='auto'?(DARKQ.matches?'light':'dark'):theme;document.documentElement.setAttribute('data-theme',resolved);const b=$('#themeBtn'),label='Tema: '+TL[theme]+(theme==='auto'?' ('+TL[resolved]+')':'');b.title=label;b.setAttribute('aria-label',label+'. Değiştirmek için tıkla')}
+$('#themeBtn').addEventListener('click',()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%3];try{localStorage.setItem('theme',theme);localStorage.setItem('axis-theme',theme)}catch(e){}applyTheme();toast('Tema: '+TL[theme])});
+if(DARKQ.addEventListener)DARKQ.addEventListener('change',()=>{if(theme==='auto')applyTheme()});
+
+/* ---------------- Visual-only: flag console outputs containing failures / not-run results (reads textContent only) ---------------- */
+(function(){
+const FAIL=/\bFAILED\b|^FAIL\b|\bBLOCKED\b|"status":\s*"(failed|failure|review_failed)"|^Hata:|^Error|Öğrenme paneli:/m,NOTRUN=/\bNOT[_ ]RUN\b/;
+function mark(x){const t=x.textContent||'';if(FAIL.test(t))x.dataset.alert='fail';else if(NOTRUN.test(t))x.dataset.alert='notrun';else delete x.dataset.alert}
+document.querySelectorAll('pre.console').forEach(x=>{mark(x);new MutationObserver(()=>mark(x)).observe(x,{childList:true,characterData:true,subtree:true})});
+})();
 
 /* ---------------- Scheduler: automatic, read-only, paused when hidden ---------------- */
-const TASKS=[{fn:reload,every:()=>5000},{fn:refreshApprovals,every:()=>20000},{fn:refreshHealth,every:()=>30000},{fn:v13Update,every:()=>mode==='learning'?10000:30000}];
-for(const t of TASKS){t.last=0;t.busy=false}
+const TASKS=[{fn:reload,every:()=>5000},{fn:refreshApprovals,every:()=>20000},{fn:refreshHealth,every:()=>30000},{fn:v13Tick,every:()=>currentTab==='ag'?10000:30000}];
+for(const t of TASKS){t.last=t.fn===v13Tick?Date.now():0;t.busy=false}
 function tick(force){if(document.hidden)return;const now=Date.now();for(const t of TASKS){if(t.busy)continue;if(force||now-t.last>=t.every()){t.busy=true;t.last=now;Promise.resolve().then(t.fn).catch(()=>{}).finally(()=>{t.busy=false})}}}
 setInterval(()=>tick(false),1000);
 document.addEventListener('visibilitychange',()=>{$('#pollState').textContent=document.hidden?'duraklatıldı':'açık';if(!document.hidden)tick(true)});
+window.addEventListener('beforeunload',()=>{try{if(graphMounted)AxisGraph.destroy()}catch(e){}try{if(neuralMounted)AxisNeural.destroy()}catch(e){}});
 
-/* initial automatic load: status, graph, recent research, health, pending proposals, learning graph */
-setRotate(auto);resize();tick(true);setMode('neural').catch(()=>{});loadGraph();axisList();
-{let saved='chat';try{const s=localStorage.getItem('axis-tab');if(TABS.includes(s))saved=s}catch(e){}switchTab(saved)}
+/* initial automatic load: theme, rail, status, network data, health, pending proposals */
+applyTheme();applyRail();renderLayerState();renderAsks();
+tick(true);loadNetwork().catch(()=>{});axisList();
+{let saved=tabFromHash(location.hash);if(!saved){saved='chat';try{const s=localStorage.getItem('axis-tab');if(s)saved=s}catch(e){}}switchTab(saved)}
 feed('AXIS konsolu açıldı','info');
-</script>
-<script>
-/* Visual-only: flag console outputs that contain failure / not-run results so they stand out. Reads textContent only. */
-(function(){
-const FAIL=/\bFAILED\b|^FAIL\b|\bBLOCKED\b|"status":\s*"(failed|failure|review_failed)"|^Hata:|^Error|Öğrenme paneli:/m,NOTRUN=/\bNOT[_ ]RUN\b/;
-function mark(el){const t=el.textContent||'';if(FAIL.test(t))el.dataset.alert='fail';else if(NOTRUN.test(t))el.dataset.alert='notrun';else delete el.dataset.alert}
-document.querySelectorAll('pre.console').forEach(el=>{mark(el);new MutationObserver(()=>mark(el)).observe(el,{childList:true,characterData:true,subtree:true})});
-})();
 </script>
 </body>
 </html>
