@@ -39,7 +39,7 @@ CONTRACT_TEST = """import ast,pathlib,unittest
 class Contract(unittest.TestCase):
  def test_ast_contract(self):
   files=list(pathlib.Path('/work').glob('*.py'))
-  target=[p for p in files if p.name!='test_contract.py'][0]
+  target=[p for p in files if not p.name.startswith('test_')][0]
   tree=ast.parse(target.read_text())
   forbidden={'eval','exec','compile','open','__import__','getattr','setattr','delattr','globals','locals'}
   forbidden_imports={'os','sys','subprocess','socket','ctypes','pickle','importlib','shutil','pathlib','urllib','requests'}
@@ -112,7 +112,8 @@ def docker_available():
   p=subprocess.run(['docker','info','--format','{{.ServerVersion}}'],capture_output=True,encoding='utf-8',errors='replace',timeout=8)
   return p.returncode==0
  except (OSError,subprocess.TimeoutExpired):return False
-def propose(target,code,description=''):
+def propose(target,code,description='',schedule=True):
+ """schedule=False: the caller attaches behavior cases first and then calls schedule_auto(id) itself."""
  safe_target(target);validate(code)
  uid=uuid.uuid4().hex;digest=hashlib.sha256(code.encode()).hexdigest()
  with LOCK:
@@ -120,7 +121,7 @@ def propose(target,code,description=''):
   (DATA/(uid+'.py')).write_bytes(code.encode())
   with connection() as db:db.execute('INSERT INTO upgrades VALUES (?,?,?,?,?,?,?,?)',(uid,target,str(description)[:500],digest,'pending','Henüz test edilmedi','',datetime.now(timezone.utc).isoformat()))
  result=detail(uid)
- result['auto_apply_queued']=schedule_auto(uid)  # background verify → decide() only when PASS
+ result['auto_apply_queued']=schedule_auto(uid) if schedule else False  # background verify → decide() only when PASS
  return result
 def detail(uid):
  with connection() as db:
