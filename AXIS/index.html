@@ -379,11 +379,13 @@ function ensureNeural(){
   /* onInputChange(a,b) is a shell extension to the brief's contract: neural.js may call it when the user flips a/b
      so the shell fetches /api/neural?a=&b= and updates both modules. Without it the shell's own a/b buttons do this. */
   $('#neuralHost').hidden=false;
-  try{AxisNeural.mount($('#neuralHost'),{onNodeSelect:()=>{},onInputChange:(a,b)=>setXor(a,b)});neuralMounted=true}catch(e){neuralError(e)}
+  try{AxisNeural.mount($('#neuralHost'),{onNodeSelect:()=>{},onInputChange:(a,b)=>setXor(a,b)});neuralMounted=true;shellXorUi(false)}catch(e){neuralError(e)}
   return neuralMounted;
 }
+/* neural.js has its own a/b pairs and readout; hide the shell's copies while it is mounted (no duplicate aria-live) */
+function shellXorUi(show){$('#pane-neural > .xor-in').hidden=!show;$('#neuralReadout').hidden=!show}
 function neuralError(e){
-  neuralFailed=true;neuralMounted=false;console.warn('AxisNeural:',e);
+  neuralFailed=true;neuralMounted=false;shellXorUi(true);console.warn('AxisNeural:',e);
   try{if(window.AxisNeural&&AxisNeural.destroy)AxisNeural.destroy()}catch(x){}
   $('#neuralHost').replaceChildren();$('#neuralHost').hidden=true;const box=$('#neuralErr');box.hidden=false;
   box.replaceChildren(modErrorCard('Ayrıntılı XOR görünümü (neural.js) açılamadı; temel bilgiler aşağıda.',async()=>{neuralFailed=false;box.hidden=true;if(!window.AxisNeural){try{await loadScript('neural.js')}catch(x){return neuralError(x)}}ensureNeural();afterNeural()}));
