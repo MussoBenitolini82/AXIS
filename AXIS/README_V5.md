@@ -41,3 +41,10 @@ Kullanıcının açık kararıyla (2026-11-10) çekirdek güncellemeler artık *
 - İsteğe bağlı: ücretsiz bir OpenAlex anahtarı `OPENALEX_API_KEY` ortam değişkeniyle verilirse istekte kullanılır. Anahtar depoya yazılmaz.
 - arXiv kayıtlarında kavram etiketleri arXiv kategorileridir (ör. `cs.LG`); doğrulanmış çıkarım değildir.
 - Araştırma tamamlanınca ya da başarısız olunca sonuç sohbete de yazılır.
+
+## Soru-cevap: hibrit arama (RAG)
+
+- Soru sorulduğunda bellek üç yoldan aranır ve sonuçlar karşılıklı sıra füzyonu (RRF) ile birleştirilir: SQLite FTS5 tam metin araması (BM25, başlık ağırlıklı, Türkçe aksan katlamalı), yerel gömme modeliyle anlamsal arama (Ollama `bge-m3`, çok dilli: Türkçe soru İngilizce özeti bulur) ve eski Türkçe→İngilizce anahtar kelime eşleyicisi.
+- Model en fazla 6 kaydı numaralı olarak görür ve yanıtta `[1]`, `[2]` diye atıf yapar; arayüz numaralı kaynakları, ağda gösterme düğmesini ve yalnızca http(s) bağlantılarını gösterir.
+- Dizin `vector.rag.sqlite3` dosyasındadır (vector.db'nin yanında, git'e girmez). Silinirse vector.db'den yeniden kurulur. Tam metin dizini her soruda özet karşılaştırmasıyla güncellenir (~0,03 sn). Gömme, sunucu açılınca ve her araştırmadan sonra arka planda yapılır (CPU'da belge başına ~0,3 sn). Durum: Sistem → «Anlamsal dizin», `GET /api/rag-status`.
+- Gömme modeli `AXIS_EMBED_MODEL` ile değiştirilebilir; model değişince vektörler yeniden üretilir. Bulut modelleri reddedilir; tüm istekler 127.0.0.1 üzerinden gider. Ollama kapalıysa arama tam metin + anahtar kelimeyle sürer.

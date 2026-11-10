@@ -136,11 +136,22 @@ def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
                     link(db,paper,c,'etiket')
             db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{source}: {limit} kayıt istendi · {len(works)} akademik kayıt işlendi'+(f' · {note}' if note else ''),job_id))
             db.commit()
+        if AFTER_RESEARCH: AFTER_RESEARCH()  # running server only: embed new abstracts in the background
         brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception as e:
         brain.log('research','openalex_search','research','failure',str(e)[:1000],job_id)
         with LOCK,connect() as db:
             db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('failed',str(e)[:400],job_id));db.commit()
+
+AFTER_RESEARCH=None  # set in __main__; tests and imports never start background embedding
+
+def start_rag_embedding():
+    try:
+        import rag
+        return rag.start_embedding()
+    except Exception as e:  # retrieval index is optional: never fail research because of it
+        print('RAG gömme başlatılamadı:',type(e).__name__)
+        return False
 
 def start_research(topic,limit=RESEARCH_DEFAULT_LIMIT):
     topic=topic.strip()[:180]
@@ -271,6 +282,9 @@ class Handler(BaseHTTPRequestHandler):
         if p.path=='/api/axis-runs': return self.send(200,axis_executor.history())
         if p.path=='/api/graph': return self.send(200,graph())
         if p.path=='/api/status': return self.send(200,status())
+        if p.path=='/api/rag-status':
+            import rag
+            return self.send(200,rag.status())
         if p.path=='/api/sources': return self.send(200,sources(urllib.parse.parse_qs(p.query).get('node',[''])[0]))
         if p.path.startswith('/static/'):
             body,ctype=static_file(p.path[len('/static/'):])
@@ -342,5 +356,7 @@ if __name__=='__main__':
     upgrades.SCHEDULER=lambda uid: POOL.submit(upgrades.auto_pipeline,uid)
     queued=upgrades.sweep_untested()
     print('Otomatik güncelleme:',('açık' if upgrades.auto_apply_enabled() else 'kapalı (AXIS_AUTO_APPLY)'),'· kuyruğa alınan:',len(queued))
+    AFTER_RESEARCH=start_rag_embedding
+    print('Anlamsal dizin (bge-m3):','arka planda güncelleniyor' if start_rag_embedding() else 'başlatılamadı')
     print('AXIS Brain: http://127.0.0.1:8765')
     ThreadingHTTPServer(('127.0.0.1',8765),Handler).serve_forever()

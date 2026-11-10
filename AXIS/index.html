@@ -171,6 +171,7 @@ document.documentElement.setAttribute('data-theme',p)})();
           <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-rag" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Anlamsal dizin</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-autoupd" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Oto. güncelleme</span><span class="st-val">—</span><span class="st-note"></span></li>
@@ -494,7 +495,13 @@ async function reload(){
     return (s.jobs||[]).some(j=>j.status==='running');
   }catch(e){$('#msg').textContent='Sunucu bağlantısı kurulamadı';return false}
 }
+async function refreshRag(){
+  try{const r=await getJSON('/api/rag-status');const n=r.embedded_docs||0,t=r.fts_docs||0;
+    setSt('rag',r.last_error?'fail':r.running?'warn':n?'ok':'notrun',n+' / '+t+' belge',r.last_error?String(r.last_error):r.running?'gömülüyor ('+(r.embed_model||'')+')':n?(r.embed_model||''):'henüz gömülmedi')}
+  catch(e){setSt('rag','unknown','—','')}
+}
 async function refreshHealth(){
+  refreshRag();
   try{const [h,cap]=await Promise.all([getJSON('/api/agent-health'),getJSON('/api/capabilities').catch(()=>null)]);
     setSt('ollama',h.ollama_reachable?'ok':'fail',h.ollama_reachable?'Erişilebilir':'Erişilemiyor',h.ollama_reachable?'127.0.0.1:11434':'Ajanlar ve sentez çalışmaz');
     setSt('model',cap&&cap.ollama_model?(h.ollama_reachable?'ok':'notrun'):'unknown',cap&&cap.ollama_model?String(cap.ollama_model):'—',h.ollama_reachable?'':'Model yüklü değil veya Ollama kapalı');
@@ -691,7 +698,11 @@ function renderAsks(){
   else{st.hidden=true;txt.textContent=e.status==='local'?e.text:plain(e.result.answer);
     if(e.status==='local'){meta.append(el('span','pill',e.label||'Yerel yanıt'),el('span','','sunucuya gönderilmedi'))}
     else{const r=e.result;if(r.action_refused){const p=el('span','pill','Eylem yapılmadı');p.dataset.state='warn';p.title='AXIS sohbetten hiçbir değişiklik uygulamaz; güncellemeler «Güncellemeler» bölümünde.';meta.append(p)}else if(r.model)meta.append(el('span','pill',r.model));
-      if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Ağda göster: '+m.id;meta.append(b)}}
+      if(r.retrieval&&r.retrieval.mode&&r.retrieval.mode!=='yok'){const m=el('span','pill','arama: '+r.retrieval.mode);m.title='tam metin: '+(r.retrieval.lexical_hits||0)+' · anlamsal: '+(r.retrieval.semantic_hits||0)+(r.retrieval.semantic_note?' ('+r.retrieval.semantic_note+')':'');meta.append(m)}
+      if(Array.isArray(r.sources)&&r.sources.length){meta.append(el('span','','Kaynaklar:'));for(const s of r.sources){const label='['+s.no+'] '+String(s.title).slice(0,60)+(s.year?' ('+s.year+')':'');
+          if(s.node_id){const b=btn(label,'',()=>selectNodeById(String(s.node_id)));b.title='Ağda göster';meta.append(b)}else meta.append(el('span','',label));
+          if(typeof s.url==='string'&&/^https?:\/\//.test(s.url)){const a=el('a','','↗');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';a.title='Kaynağı aç: '+s.url;meta.append(a)}}}
+      else if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Ağda göster: '+m.id;meta.append(b)}}
       else if(r.general_knowledge){const g=el('span','pill','genel bilgi');g.dataset.state='warn';g.title='Bellekte ilgili kayıt bulunamadı; yanıt modelin genel bilgisinden.';meta.append(g)}
       meta.append(el('span','',(typeof r.elapsed_s==='number'?r.elapsed_s.toFixed(1):secs(e))+' sn'))}}
   const hist=$('#askHistory');hist.replaceChildren();
