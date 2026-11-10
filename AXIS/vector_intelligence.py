@@ -133,9 +133,12 @@ def ingest_pdf(filename, raw):
     if not filename.lower().endswith('.pdf') or len(raw)>8_000_000 or len(raw)<100:raise ValueError('PDF 8 MB altında olmalı')
     try:import fitz
     except ImportError:raise ValueError('PDF okumak için: py -m pip install pymupdf')
-    doc=fitz.open(stream=raw,filetype='pdf')
-    if doc.page_count>100:raise ValueError('En fazla 100 sayfa')
-    pages=[p.get_text() for p in doc]
+    try:doc=fitz.open(stream=raw,filetype='pdf')
+    except Exception:raise ValueError('PDF açılamadı; dosya bozuk veya PDF değil') from None
+    try:
+        if doc.page_count>100:raise ValueError('En fazla 100 sayfa')
+        pages=[p.get_text() for p in doc]
+    finally:doc.close()
     text='\n'.join(pages).strip()[:120000]
     if not text:raise ValueError('Metin çıkarılamadı; taranmış PDF için OCR gerekir')
     digest=hashlib.sha256(raw).hexdigest()[:16]
@@ -144,21 +147,25 @@ def ingest_pdf(filename, raw):
         sid='local-pdf:'+digest
         db.execute('INSERT OR REPLACE INTO sources VALUES (?,?,?,?,?,?,?)',(sid,title,'','','',text[:5500],server.now()))
         nid=server.add_node(db,title,'paper',text[:350]);db.execute('INSERT OR REPLACE INTO evidence VALUES (?,?,?)',(nid,sid,text[:350]))
-        for token in set(re.findall(r'(?u)\b[A-Za-zÇĞİÖŞÜçğıöşü]{6,}\b',text[:8000].lower())):
-            if token in {'olarak','because','between','through','these','those','which','their'}:continue
-            # Explicitly no fabricated semantic links: PDF is connected to a document node only.
+        # Explicitly no fabricated semantic links: PDF is connected to a document node only.
         db.commit()
     return {'node_id':nid,'pages':len(pages),'characters':len(text),'note':'Metin çıkarıldı; içerik doğrulanmadı. Yalnızca ilk 5500 karakter kaynak özeti olarak saklandı.'}
 
+def count_nodes():
+    """Real totals. server.graph() is capped at the 500 newest nodes, so its length is not a count."""
+    with server.connect() as db:
+        return {'nodes':db.execute('SELECT COUNT(*) FROM nodes').fetchone()[0],'edges':db.execute('SELECT COUNT(*) FROM edges').fetchone()[0]}
 TOOLS={
- 'count_nodes': lambda arg: {'nodes':len(server.graph()['nodes']),'edges':len(server.graph()['edges'])},
+ 'count_nodes': lambda arg: count_nodes(),
  'list_recent_research': lambda arg: server.status()['jobs'][:10],
  'search_memory': lambda arg: search_memory(str(arg.get('query',''))),
 }
 def search_memory(query):
     if not query.strip():return []
     with server.connect() as db:
-        return [dict(x) for x in db.execute('SELECT id,label,kind,description FROM nodes WHERE label LIKE ? LIMIT 20',('%'+query[:80]+'%',))]
+        # % and _ in the query are literal text, not LIKE wildcards.
+        like='%'+query[:80].replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+        return [dict(x) for x in db.execute("SELECT id,label,kind,description FROM nodes WHERE label LIKE ? ESCAPE '\\' LIMIT 20",(like,))]
 def run_parallel(tasks):
     if not isinstance(tasks,list) or not 1<=len(tasks)<=8:raise ValueError('1-8 görev gönder')
     for t in tasks:

@@ -21,7 +21,8 @@ BLOCKED={'subprocess','socket','ctypes','multiprocessing','winreg','pickle','mar
 BLOCKED_CALLS={'eval','exec','compile','open','__import__','input','breakpoint'}
 def check(code):
  if not isinstance(code,str) or not code.strip() or len(code)>30000:raise ValueError('Kod boş veya çok büyük')
- tree=ast.parse(code)
+ try:tree=ast.parse(code)
+ except SyntaxError as e:raise ValueError(f'Sözdizimi hatası: satır {e.lineno}') from None  # 400 for the user, not a 503
  for node in ast.walk(tree):
   if isinstance(node,(ast.Import,ast.ImportFrom)):
    names=([a.name.split('.')[0] for a in node.names] if isinstance(node,ast.Import) else [(node.module or '').split('.')[0]])
@@ -33,7 +34,8 @@ def propose(skill,code,summary):
  skill=valid_name(skill);test=check(code)
  pid=uuid.uuid4().hex;digest=hashlib.sha256(code.encode()).hexdigest()
  with LOCK:
-  (PENDING/(pid+'.py')).write_text(code,encoding='utf-8')
+  # Exact UTF-8 bytes: write_text turns LF into CRLF on Windows, so code containing CR would no longer match its digest.
+  (PENDING/(pid+'.py')).write_bytes(code.encode())
   with db() as c:c.execute('INSERT INTO proposals VALUES (?,?,?,?,?,?,?)',(pid,skill,'pending',datetime.now(timezone.utc).isoformat(),digest,str(summary)[:300],test))
  return {'id':pid,'skill':skill,'status':'pending','sha256':digest,'test_result':test,'diff':diff(skill,code)}
 def diff(skill,code):
@@ -54,15 +56,20 @@ def decide(pid,action,confirmation):
  with LOCK,db() as c:
   r=c.execute('SELECT * FROM proposals WHERE id=?',(pid,)).fetchone()
   if not r or r['status']!='pending':raise ValueError('Bekleyen öneri bulunamadı')
-  staged=PENDING/(pid+'.py');code=staged.read_text(encoding='utf-8')
-  if hashlib.sha256(code.encode()).hexdigest()!=r['sha256']:raise ValueError('Öneri değişmiş')
+  staged=PENDING/(pid+'.py')
+  # A missing or altered staged file blocks approval only; rejecting it must always stay possible.
   if action=='approve':
+   if not staged.exists():raise ValueError('Öneri dosyası bulunamadı')
+   raw=staged.read_bytes()
+   if hashlib.sha256(raw).hexdigest()!=r['sha256']:
+    raw=raw.replace(b'\r\n',b'\n')  # proposals staged by older versions were written through text mode (CRLF on Windows)
+    if hashlib.sha256(raw).hexdigest()!=r['sha256']:raise ValueError('Öneri değişmiş')
+   code=raw.decode('utf-8')
    check(code)
    target=SKILLS/(r['skill']+'.py')
    if target.exists():shutil.copy2(target,BACKUPS/(pid+'_'+r['skill']+'.py'))
-   tmp=SKILLS/(pid+'.tmp');tmp.write_text(code,encoding='utf-8')
-   try:
-    ast.parse(tmp.read_text(encoding='utf-8'));os.replace(tmp,target)
+   tmp=SKILLS/(pid+'.tmp');tmp.write_bytes(raw)
+   try:os.replace(tmp,target)
    finally:tmp.unlink(missing_ok=True)
   c.execute('UPDATE proposals SET status=? WHERE id=?',('approved' if action=='approve' else 'rejected',pid))
   staged.unlink(missing_ok=True)
