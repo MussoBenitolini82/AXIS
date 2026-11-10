@@ -3,6 +3,12 @@ from pathlib import Path
 from unittest.mock import patch
 import vector_upgrade as u
 class V8Tests(unittest.TestCase):
+ def setUp(self):
+  # Isolate DATA/DB/TESTS/ROOT so proposals never land in a real install.
+  tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+  data=Path(tmp.name);root=data/'root';root.mkdir();tests=data/'behavior_specs';tests.mkdir()
+  for name,val in (('DATA',data),('DB',data/'upgrades.sqlite3'),('TESTS',tests),('ROOT',root)):
+   p=patch.object(u,name,val);p.start();self.addCleanup(p.stop)
  def test_valid_cases(self):
   self.assertEqual(len(u.validate_behavior_cases([{'function':'add','args':[2,3],'expected':5}])),1)
  def test_bad_function(self):

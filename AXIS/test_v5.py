@@ -1,7 +1,14 @@
 import tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 import neural_view, vector_upgrade as up
 class V5Tests(unittest.TestCase):
+ def setUp(self):
+  # Isolate DATA/DB/TESTS/ROOT so proposals never land in a real install.
+  tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+  data=Path(tmp.name);root=data/'root';root.mkdir();tests=data/'behavior_specs';tests.mkdir()
+  for name,val in (('DATA',data),('DB',data/'upgrades.sqlite3'),('TESTS',tests),('ROOT',root)):
+   p=patch.object(up,name,val);p.start();self.addCleanup(p.stop)
  def test_real_weights(self):
   g=neural_view.model_graph()
   self.assertTrue(g['available'])

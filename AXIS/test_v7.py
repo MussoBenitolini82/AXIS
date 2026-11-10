@@ -1,7 +1,14 @@
-import ast,unittest
+import ast,tempfile,unittest
+from pathlib import Path
 from unittest.mock import patch
 import vector_agents,vector_upgrade
 class AgentTests(unittest.TestCase):
+ def setUp(self):
+  # Isolate every path the agent/upgrade pipeline writes to, so a run inside a real install never touches it.
+  tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+  data=Path(tmp.name);root=data/'root';root.mkdir();tests=data/'behavior_specs';tests.mkdir()
+  for mod,name,val in ((vector_upgrade,'DATA',data),(vector_upgrade,'DB',data/'upgrades.sqlite3'),(vector_upgrade,'TESTS',tests),(vector_upgrade,'ROOT',root),(vector_agents,'ROOT',root),(vector_agents,'DB',data/'agents.sqlite3')):
+   p=patch.object(mod,name,val);p.start();self.addCleanup(p.stop)
  def test_extract_code(self):
   self.assertEqual(vector_agents.extract_code('```python\ndef run(x): return x\n```'),'def run(x): return x')
  def test_invalid_syntax(self):
