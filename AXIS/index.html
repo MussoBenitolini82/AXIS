@@ -362,10 +362,10 @@ details.tool > summary .tag{margin-left:auto;font-family:var(--font-mono);font-s
         <button type="submit" class="primary" id="cmdGo">Gönder</button>
       </div>
       <div class="intent" id="intent" aria-live="polite"><b id="intentName">—</b><span id="intentPath"></span></div>
-      <p id="cmdHelp" class="visually-hidden">Soru yaz ve Enter'a bas; yerel model yanıtlar. Literatür araması için «araştır konu». AXIS komut satırından hiçbir şey uygulamaz veya onaylamaz.</p>
+      <p id="cmdHelp" class="visually-hidden">Soru yaz ve Enter'a bas; yerel model yanıtlar. Literatür araması için «araştır konu» (varsayılan 50 kayıt) ya da «araştır 100 konu». AXIS komut satırından hiçbir şey uygulamaz veya onaylamaz.</p>
       <div class="chips" aria-label="Hızlı komutlar">
         <button type="button" data-cmd="Bellekte neler var?">Bellekte neler var?</button>
-        <button type="button" data-cmd="araştır " data-fill="1">araştır …</button>
+        <button type="button" data-cmd="araştır " data-fill="1" title="Kayıt sayısı için: araştır 100 konu (varsayılan 50)">araştır 50 konu</button>
         <button type="button" data-cmd="hafızada ara " data-fill="1">hafızada ara …</button>
         <button type="button" data-cmd="durum">durum</button>
         <button type="button" data-cmd="yardım" title="Tüm komutlar">?</button>
@@ -882,6 +882,22 @@ function norm(s){return s.toLocaleLowerCase('tr').replace(/ı/g,'i').replace(/ğ
 const ACTION_RE=/(^|\s)(uygula|uygulayin|uygular misin|onayla|onaylayin|reddet|geri al|calistir|kur|yukle|sil|duzelt|guncelle|degistir|deploy et|commit et|push et|merge et)\s*[.!]*$/;
 const ACTION_TEXT='AXIS bunu komut satırından yapmaz: buradan hiçbir güncelleme, düzeltme, kurulum, onay veya dosya değişikliği uygulanmaz.\n\n• Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa sunucu tarafından otomatik uygulanır; durumları, farkları ve «Geri al» «Güncellemeler» sekmesinde.\n• Beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler aynı sekmede senin onayını bekler.\n\nBir değişikliğin ne yapacağını soru olarak sorabilirsin.';
 const MAX_Q=2000;
+/* Research command parsing (pure; tested with node). n = norm(text); returns null (not a research command) or {topic,limit} or {error}.
+   «araştır 100 konu» (number right after the verb) · «konu hakkında 30 makale» · «araştır konu 30 kayıt». No number → 50. Valid 1..200. */
+const RESEARCH_DEFAULT=50,RESEARCH_MAX=200;
+function parseResearch(text,n){
+  let m,topic=null,num=null;
+  if((m=n.match(/^(arastir|ogren|incele)\s+/))){
+    topic=text.slice(m[0].length).trim();let rest=n.slice(m[0].length);
+    if((m=rest.match(/^(\d+)\s+/))){num=m[1];topic=topic.slice(m[0].length).trim()}
+    else if((m=rest.match(/\s+(\d+)\s+(makale(ler)?|kayit(lar)?|yayin(lar)?)\s*[.!]*$/))){num=m[1];topic=topic.slice(0,topic.length-m[0].length).trim()}
+  }else if((m=n.match(/\s+hakkinda\s+(\d+)\s+(makale(ler)?|kayit(lar)?)( bul| ara)?\s*[.!]*$/))){num=m[1];topic=text.slice(0,text.length-m[0].length).trim()}
+  else if((m=n.match(/\s+(hakkinda arastir|konusunu arastir|arastir|hakkinda makale(ler)?( bul| ara)?|hakkinda literatur|makale(leri)? (bul|ara))\s*[.!]*$/)))topic=text.slice(0,text.length-m[0].length).trim();
+  if(topic===null)return null;
+  let limit=RESEARCH_DEFAULT;
+  if(num!==null){limit=parseInt(num,10);if(!(limit>=1&&limit<=RESEARCH_MAX))return {error:'Kayıt sayısı 1 ile '+RESEARCH_MAX+' arasında olmalı (girilen: '+num+'). Örn. «araştır 100 yapay sinir ağları».'}}
+  return {topic,limit};
+}
 /* Each rule: test on the normalised text, label, endpoint(s) shown to the user, run(). Read-only unless noted. */
 function parseIntent(raw){
   const text=raw.trim(),n=norm(text);let m;
@@ -900,10 +916,11 @@ function parseIntent(raw){
   if((m=n.match(/^(sentezle|sentez|ozetle)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Literatür sentezi: «'+q+'»',path:'POST /api/synthesize (yerel model)',run:()=>cmdSynth(q)}}
   /* Literature search ONLY on an explicit request. */
   if(/^(arastir|ogren|incele)$/.test(n))return {name:'Araştırma konusu eksik',path:'yerel',run:()=>localAnswer(text,'Neyi araştırayım? Örn. «araştır yapay sinir ağları» ya da «yapay sinir ağları hakkında makale».','Konu eksik')};
-  let topic=null;
-  if((m=n.match(/^(arastir|ogren|incele)\s+/)))topic=text.slice(m[0].length).trim();
-  else if((m=n.match(/\s+(hakkinda arastir|konusunu arastir|arastir|hakkinda makale(ler)?( bul| ara)?|hakkinda literatur|makale(leri)? (bul|ara))\s*[.!]*$/)))topic=text.slice(0,text.length-m[0].length).trim();
-  if(topic!==null)return {name:'Literatür araştırması: «'+topic+'»',path:'POST /api/research (OpenAlex)',run:()=>cmdResearch(topic)};
+  const rs=parseResearch(text,n);
+  if(rs){
+    if(rs.error)return {name:'Araştırma — geçersiz kayıt sayısı',path:'yerel',run:()=>localAnswer(text,rs.error,'Geçersiz sayı')};
+    return {name:'araştır · '+rs.limit+' kayıt',path:'«'+rs.topic+'» · POST /api/research (OpenAlex)',run:()=>cmdResearch(rs.topic,rs.limit)};
+  }
   return {name:'Soru — yerel model yanıtlar',path:'POST /api/ask ('+(text.length>MAX_Q?'ÇOK UZUN':'yerel Ollama')+')',run:()=>cmdAsk(text)};
 }
 function showIntent(it){$('#intentName').textContent=it?it.name:'—';$('#intentPath').textContent=it?'→ '+it.path:''}
@@ -969,12 +986,13 @@ async function cmdMemory(q){if(!q)throw Error('Aranacak kavramı yaz');const r=a
 async function cmdSynth(q){if(!q)throw Error('Konu yaz');const entry={q:'sentezle '+q,status:'running',started:Date.now(),lastPoll:Infinity};pushAsk(entry);
   try{const r=await postJSON('/api/synthesize',{topic:q});showOut(r);entry.status='completed';entry.result={answer:r.answer+'\n\n('+r.note+')',model:'literatür sentezi',used_memory:[],general_knowledge:false};feed('Sentez hazır: '+q,'ok')}
   catch(e){entry.status='failed';entry.error=e.message}entry.finished=Date.now();renderAsks()}
-async function cmdResearch(topic){
+async function cmdResearch(topic,limit){
   if(topic.length<3)throw Error('Konu en az 3 karakter olmalı');
-  const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
-  feed('Araştırma çalışıyor: '+topic,'info');localAnswer('araştır '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'». Kayıtlar «Bellek» sekmesinde görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
+  limit=limit||RESEARCH_DEFAULT;
+  const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
+  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Bellek» sekmesinde görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
 }
-function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · <konu> hakkında makale → OpenAlex literatür araması','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
+function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 
 /* ---------------- Tabs, theme, wiring ---------------- */
 const TABS=['chat','neural','memory','updates','system','tools'];let currentTab='chat';

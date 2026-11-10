@@ -43,9 +43,9 @@ def add_node(db,label,kind,description=''):
 def link(db,a,b,relation):
     if a!=b: db.execute('INSERT OR IGNORE INTO edges VALUES (?,?,?)',(a,b,relation))
 
-def fetch_json(url):
+def fetch_json(url,timeout=18):
     req=urllib.request.Request(url,headers={'User-Agent':'VECTORBrain/0.2 (research prototype; local application)','Accept':'application/json'})
-    with urllib.request.urlopen(req,timeout=18) as resp:
+    with urllib.request.urlopen(req,timeout=timeout) as resp:
         return json.load(resp)
 
 def clean_abstract(inv):
@@ -55,9 +55,18 @@ def clean_abstract(inv):
         for pos in positions: words.append((pos,token))
     return ' '.join(w for _,w in sorted(words))[:5500]
 
-def search_openalex(topic,limit=7):
+RESEARCH_DEFAULT_LIMIT=50
+RESEARCH_MAX_LIMIT=200   # OpenAlex per-page maximum
+
+def parse_limit(value):
+    """Validated record count for a research job: a real int (not bool) within 1..200."""
+    if isinstance(value,bool) or not isinstance(value,int): raise ValueError(f'Kayıt sayısı 1 ile {RESEARCH_MAX_LIMIT} arasında bir tam sayı olmalı')
+    if not 1<=value<=RESEARCH_MAX_LIMIT: raise ValueError(f'Kayıt sayısı 1 ile {RESEARCH_MAX_LIMIT} arasında olmalı')
+    return value
+
+def search_openalex(topic,limit=RESEARCH_DEFAULT_LIMIT):
     params=urllib.parse.urlencode({'search':topic,'per-page':limit,'select':'id,title,publication_year,doi,primary_location,abstract_inverted_index,concepts'})
-    data=fetch_json('https://api.openalex.org/works?'+params)
+    data=fetch_json('https://api.openalex.org/works?'+params,timeout=60)  # up to 200 abstracts: larger body than the 18 s default allows
     out=[]
     for w in data.get('results',[]):
         loc=w.get('primary_location') or {}
@@ -65,9 +74,9 @@ def search_openalex(topic,limit=7):
         out.append({'id':w.get('id') or str(uuid.uuid4()),'title':w.get('title') or 'Başlıksız','year':w.get('publication_year'),'doi':w.get('doi'),'url':url,'abstract':clean_abstract(w.get('abstract_inverted_index')),'concepts':[x['display_name'] for x in w.get('concepts',[]) if x.get('score',0)>=.5][:8]})
     return out
 
-def research(topic,job_id):
+def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
     try:
-        works=search_openalex(topic)
+        works=search_openalex(topic,limit)
         with LOCK,connect() as db:
             root=add_node(db,topic,'topic','Araştırma konusu; kaynaklardan otomatik oluşturuldu')
             for w in works:
@@ -79,7 +88,7 @@ def research(topic,job_id):
                 for concept in w['concepts']:
                     c=add_node(db,concept,'concept','OpenAlex tarafından etiketlenen kavram; doğrulanmış çıkarım değildir')
                     link(db,paper,c,'etiket')
-            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{len(works)} akademik kayıt işlendi',job_id))
+            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{limit} kayıt istendi · {len(works)} akademik kayıt işlendi',job_id))
             db.commit()
         brain.log('research','openalex_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception as e:
@@ -87,13 +96,14 @@ def research(topic,job_id):
         with LOCK,connect() as db:
             db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('failed',str(e)[:400],job_id));db.commit()
 
-def start_research(topic):
+def start_research(topic,limit=RESEARCH_DEFAULT_LIMIT):
     topic=topic.strip()[:180]
     if len(topic)<3: raise ValueError('Konu en az 3 karakter olmalı')
+    limit=parse_limit(limit)
     jid=str(uuid.uuid4())
     with LOCK,connect() as db:
-        db.execute('INSERT INTO jobs VALUES (?,?,?,?,?)',(jid,topic,'running','OpenAlex aranıyor',now()));db.commit()
-    POOL.submit(research,topic,jid)
+        db.execute('INSERT INTO jobs VALUES (?,?,?,?,?)',(jid,topic,'running',f'OpenAlex aranıyor · {limit} kayıt istendi',now()));db.commit()
+    POOL.submit(research,topic,jid,limit)
     return {'job_id':jid,'status':'running'}
 
 # ---------------- Questions answered by the local model (async: CPU answers take minutes) ----------------
@@ -256,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(201,vi.ingest_pdf(str(data.get('filename','')),base64.b64decode(data.get('content_base64',''),validate=True)))
             if self.path=='/api/propose': return self.send(201,evolution.propose(data.get('skill'),data.get('code'),data.get('summary','')))
             if self.path=='/api/decision': return self.send(200,evolution.decide(data.get('id'),data.get('action'),data.get('confirmation','')))
-            self.send(202,start_research(str(data.get('topic',''))))
+            self.send(202,start_research(str(data.get('topic','')),data.get('limit',RESEARCH_DEFAULT_LIMIT)))
         except (ValueError,TypeError,json.JSONDecodeError) as e: self.send(400,{'error':str(e)})
         except Exception as e: self.send(503,{'error':str(e)[:350]})
     def log_message(self,*args): pass
