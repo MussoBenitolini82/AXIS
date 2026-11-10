@@ -1,22 +1,35 @@
 """Approval-gated, Docker-tested changes. Never execute generated code on the host."""
 from axis_sqlite import ClosingConnection
-import ast, difflib, hashlib, json, os, shutil, sqlite3, subprocess, tempfile, threading, uuid
+import ast, difflib, hashlib, json, os, re, shutil, sqlite3, subprocess, tempfile, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 DATA=ROOT/'upgrades'; DATA.mkdir(exist_ok=True)
 DB=DATA/'upgrades.sqlite3'; LOCK=threading.RLock()
 TESTS=DATA/'behavior_specs'; TESTS.mkdir(exist_ok=True)
-# Only opt-in, narrowly scoped Python modules. server.py and approval/security code excluded.
-ALLOWED={'research_extensions.py','skills_helpers.py'}
+# Any top-level AXIS Python module may be upgraded EXCEPT the safety net itself: the update/test/rollback
+# pipeline, the local-only model guard, the HTTP origin checks + approval endpoints, the SQLite factory,
+# and every test file (an update must never be able to edit its own tests). Non-.py files (index.html
+# holds the approval UI) and anything outside the AXIS top level are refused too.
+PROTECTED=frozenset({'vector_upgrade.py','local_models.py','server.py','axis_sqlite.py'})
+_MODULE_NAME=re.compile(r'[A-Za-z_][A-Za-z0-9_]*\.py')
 def connection():
  c=sqlite3.connect(DB, factory=ClosingConnection,timeout=15);c.row_factory=sqlite3.Row
- try:c.execute('CREATE TABLE IF NOT EXISTS upgrades(id TEXT PRIMARY KEY, target TEXT, description TEXT, digest TEXT, status TEXT, report TEXT, backup TEXT, created TEXT)');c.commit()
+ try:
+  c.execute('CREATE TABLE IF NOT EXISTS upgrades(id TEXT PRIMARY KEY, target TEXT, description TEXT, digest TEXT, status TEXT, report TEXT, backup TEXT, created TEXT)')
+  c.execute('CREATE TABLE IF NOT EXISTS auto_events(id TEXT PRIMARY KEY, upgrade_id TEXT, target TEXT, description TEXT, outcome TEXT, detail TEXT, created TEXT)')
+  c.commit()
  except BaseException:c.close();raise
  return c
 def safe_target(name):
- if name not in ALLOWED:raise ValueError('Bu çekirdek dosyası otomatik güncellemeye kapalı')
- return ROOT/name
+ refused='Bu çekirdek dosyası otomatik güncellemeye kapalı'
+ if not isinstance(name,str) or not _MODULE_NAME.fullmatch(name):raise ValueError(refused+' (yalnızca AXIS üst düzey .py modülleri)')
+ if name in PROTECTED or name.lower() in PROTECTED:raise ValueError(refused+' (korunan güvenlik dosyası)')
+ if name.lower().startswith('test'):raise ValueError(refused+' (test dosyaları korunur)')
+ root=ROOT.resolve();path=ROOT/name
+ if path.is_symlink():raise ValueError(refused+' (sembolik bağlantı)')
+ if path.resolve().parent!=root:raise ValueError(refused+' (AXIS klasörü dışında)')
+ return path
 def validate(code):
  if not isinstance(code,str) or not code.strip() or len(code)>100000:raise ValueError('Geçersiz kod')
  try:ast.parse(code)
@@ -106,7 +119,9 @@ def propose(target,code,description=''):
   # Exact UTF-8 bytes: write_text would turn LF into CRLF on Windows and break the digest.
   (DATA/(uid+'.py')).write_bytes(code.encode())
   with connection() as db:db.execute('INSERT INTO upgrades VALUES (?,?,?,?,?,?,?,?)',(uid,target,str(description)[:500],digest,'pending','Henüz test edilmedi','',datetime.now(timezone.utc).isoformat()))
- return detail(uid)
+ result=detail(uid)
+ result['auto_apply_queued']=schedule_auto(uid)  # background verify → decide() only when PASS
+ return result
 def detail(uid):
  with connection() as db:
   row=db.execute('SELECT * FROM upgrades WHERE id=?',(uid,)).fetchone()
@@ -222,3 +237,50 @@ def rollback(uid,confirmation=''):
    raise
   undo.unlink(missing_ok=True)
   return {'status':'rolled_back','restart_required':True}
+
+# ---------------- Automatic apply (user decision 2026-11-10) ----------------
+# A pending upgrade is applied without a click ONLY through the normal decide() path, which re-runs a
+# fresh Docker test, re-checks the digest and applies atomically. FAIL/BLOCKED leaves it pending.
+# Kill switch: AXIS_AUTO_APPLY=0 / false / off.
+SCHEDULER=None  # set by server.py at start-up: callable(uid) that queues auto_pipeline in the POOL
+def auto_apply_enabled():
+ return os.getenv('AXIS_AUTO_APPLY','1').strip().lower() not in ('0','false','off')
+def schedule_auto(uid):
+ if SCHEDULER is None or not auto_apply_enabled():return False
+ try:SCHEDULER(uid);return True
+ except Exception:return False
+def _audit(r,outcome,detail_text):
+ summary=('Otomatik uygulandı: ' if outcome=='applied' else 'Otomatik uygulanmadı: ')+r['target']+' — '+(r.get('description') or '')[:300]
+ with connection() as db:
+  db.execute('INSERT INTO auto_events VALUES (?,?,?,?,?,?,?)',(uuid.uuid4().hex,r['id'],r['target'],(r.get('description') or '')[:500],outcome,str(detail_text)[:1000],datetime.now(timezone.utc).isoformat()))
+ try:
+  import central_brain
+  central_brain.log('auto_upgrade','auto_apply' if outcome=='applied' else 'auto_not_applied','core_upgrade','success' if outcome=='applied' else 'failure',(summary+' · '+str(detail_text))[:1900],r['id'],{'target':r['target'],'outcome':outcome})
+ except Exception:
+  pass  # the auto_events row above is the authoritative audit record
+ return summary
+def auto_pipeline(uid):
+ if not auto_apply_enabled():return {'id':uid,'outcome':'disabled'}
+ r=detail(uid)
+ if r['status']!='pending':return {'id':uid,'outcome':'skipped','status':r['status']}
+ try:test=verify(uid)
+ except ValueError as e:test={'passed':False,'report':'FAIL: '+str(e)}
+ if not test['passed']:
+  _audit(r,'not_applied','Test başarısız; öneri bekliyor, hiçbir şey uygulanmadı. '+test['report'][:300])
+  return {'id':uid,'outcome':'not_applied','report':test['report']}
+ if not auto_apply_enabled():return {'id':uid,'outcome':'disabled'}
+ try:result=decide(uid,'approve','ONAYLIYORUM')  # fresh Docker test + digest check + atomic apply
+ except Exception as e:
+  _audit(r,'not_applied','Uygulama reddedildi: '+str(e)[:300])
+  return {'id':uid,'outcome':'not_applied','error':str(e)[:300]}
+ _audit(r,'applied','Docker testi PASS; yedek '+('alındı' if result.get('backup') else 'yok (yeni dosya)')+'; yeniden başlatma gerekli')
+ return {'id':uid,'outcome':'applied','restart_required':True,'backup':result.get('backup')}
+def sweep_untested():
+ """Queue every pending, never-tested proposal (e.g. created before auto-apply existed)."""
+ with connection() as db:
+  ids=[x['id'] for x in db.execute("SELECT id FROM upgrades WHERE status='pending' AND report='Henüz test edilmedi' ORDER BY created")]
+ return [uid for uid in ids if schedule_auto(uid)]
+def auto_status(limit=20):
+ with connection() as db:
+  events=[dict(x) for x in db.execute('SELECT e.*,u.status AS upgrade_status FROM auto_events e LEFT JOIN upgrades u ON u.id=e.upgrade_id ORDER BY e.created DESC LIMIT ?',(max(1,min(int(limit),100)),))]
+ return {'enabled':auto_apply_enabled(),'events':events,'protected':sorted(PROTECTED)+['test_*.py']}

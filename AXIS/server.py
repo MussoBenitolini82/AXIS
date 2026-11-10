@@ -96,6 +96,56 @@ def start_research(topic):
     POOL.submit(research,topic,jid)
     return {'job_id':jid,'status':'running'}
 
+# ---------------- Questions answered by the local model (async: CPU answers take minutes) ----------------
+ASK_JOBS={}            # job_id -> result dict; in memory only, answers are not stored as knowledge
+ASK_LOCK=threading.Lock()
+ASK_MAX_JOBS=50
+ASK_MAX_RUNNING=2
+
+def ask_error_message(e):
+    """Turkish, user-facing reason. Never suggests or falls back to a cloud model."""
+    import socket, urllib.error
+    text=str(e)
+    if isinstance(e,local_models.CloudModelError):return 'Yerel model kullanılamadı: '+text[:300]
+    if isinstance(e,(TimeoutError,socket.timeout)) or 'timed out' in text.lower():return 'Yerel model zaman aşımına uğradı (180 sn). Model CPU üzerinde yavaş olabilir; daha kısa bir soru dene.'
+    if isinstance(e,urllib.error.HTTPError):return 'Yerel Ollama hata döndürdü (HTTP '+str(e.code)+'). Model kurulu mu? ('+local_models.model_name()+')'
+    if isinstance(e,urllib.error.URLError):return 'Yerel Ollama sunucusuna ulaşılamadı: '+str(e.reason)[:200]
+    return 'Yanıt üretilemedi: '+text[:300]
+
+def run_ask(question,job_id):
+    import vector_intelligence as vi
+    try:
+        result=vi.answer_question(question)
+        update={'status':'completed','error':None,**result}
+        try:brain.log('assistant','answer_question','local_llm','success',('Soru yanıtlandı: '+question)[:500],job_id,{'used_memory':[m['id'] for m in result['used_memory']],'elapsed_s':result['elapsed_s']})
+        except Exception:pass
+    except Exception as e:
+        update={'status':'failed','error':ask_error_message(e)}
+        try:brain.log('assistant','answer_question','local_llm','failure',update['error'][:1000],job_id)
+        except Exception:pass
+    with ASK_LOCK:
+        if job_id in ASK_JOBS:ASK_JOBS[job_id].update(update,finished=now())
+
+def start_ask(question):
+    import vector_intelligence as vi
+    q=vi.validate_question(question)
+    jid=str(uuid.uuid4())
+    with ASK_LOCK:
+        if sum(1 for j in ASK_JOBS.values() if j['status']=='running')>=ASK_MAX_RUNNING:
+            raise ValueError('Yerel model hâlâ önceki soruları yanıtlıyor; biraz bekle.')
+        while len(ASK_JOBS)>=ASK_MAX_JOBS:  # drop the oldest finished job (dicts keep insertion order)
+            old=next((k for k,v in ASK_JOBS.items() if v['status']!='running'),None)
+            if old is None:raise ValueError('Çok fazla bekleyen soru')
+            del ASK_JOBS[old]
+        ASK_JOBS[jid]={'id':jid,'status':'running','question':q,'created':now(),'error':None}
+    POOL.submit(run_ask,q,jid)
+    return {'job_id':jid,'status':'running'}
+
+def ask_result(jid):
+    with ASK_LOCK:
+        job=ASK_JOBS.get(jid)
+        return dict(job) if job else None
+
 def graph():
     with LOCK,connect() as db:
         nodes=[dict(x) for x in db.execute('SELECT * FROM nodes ORDER BY created DESC LIMIT 500')]
@@ -123,10 +173,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p=urllib.parse.urlsplit(self.path)
         if p.path=='/': return self.send(200,(ROOT/'index.html').read_bytes(),'text/html')
-        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'features':['literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
+        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'auto_apply_upgrades':upgrades.auto_apply_enabled(),'features':['question_answering','literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
         if p.path=='/api/neural':
             # http_response validates a/b and returns (400, error) instead of raising on bad input.
             return self.send(*neural_view.http_response(urllib.parse.parse_qs(p.query)))
+        if p.path=='/api/ask-result':
+            job=ask_result(urllib.parse.parse_qs(p.query).get('id',[''])[0])
+            return self.send(200,job) if job else self.send(404,{'error':'Soru işi bulunamadı (sunucu yeniden başlatılmış olabilir)'})
+        if p.path=='/api/upgrade-auto': return self.send(200,upgrades.auto_status())
         if p.path=='/api/agent-catalog': return self.send(200,discovery.listing())
         if p.path=='/api/agent-health': return self.send(200,discovery.health())
         if p.path=='/api/agents': return self.send(200,vector_agents.listing())
@@ -156,11 +210,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403,{'error':'Cross-origin istek reddedildi'})
         if self.headers.get('Sec-Fetch-Site','')=='cross-site':
             return self.send(403,{'error':'Cross-site istek reddedildi'})
-        if self.path not in ('/api/research','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models'): return self.send(404,{'error':'Not found'})
+        if self.path not in ('/api/research','/api/ask','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models'): return self.send(404,{'error':'Not found'})
         try:
             length=int(self.headers.get('Content-Length','0'))
             if length>11500000: raise ValueError('İstek çok büyük')
             data=json.loads(self.rfile.read(length))
+            if not isinstance(data,dict): raise ValueError('JSON nesnesi bekleniyor')
+            if self.path=='/api/ask': return self.send(202,start_ask(data.get('question')))
             if self.path=='/api/axis-v13-develop': return self.send(201,axis_v13.development(str(data.get('request','')),str(data.get('target','research_extensions.py'))))
             if self.path=='/api/axis-v13-repair': return self.send(201,axis_v13.repair(str(data.get('error','')),str(data.get('target','research_extensions.py'))))
             if self.path=='/api/axis-v13-models': return self.send(200,axis_v13.model_suggestions(str(data.get('request',''))))
@@ -207,5 +263,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=='__main__':
     with connect(): pass
+    # Auto-apply of core upgrades (user decision 2026-11-10; kill switch AXIS_AUTO_APPLY=0).
+    upgrades.SCHEDULER=lambda uid: POOL.submit(upgrades.auto_pipeline,uid)
+    queued=upgrades.sweep_untested()
+    print('Otomatik güncelleme:',('açık' if upgrades.auto_apply_enabled() else 'kapalı (AXIS_AUTO_APPLY)'),'· kuyruğa alınan:',len(queued))
     print('AXIS Brain: http://127.0.0.1:8765')
     ThreadingHTTPServer(('127.0.0.1',8765),Handler).serve_forever()

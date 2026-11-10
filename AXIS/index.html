@@ -107,7 +107,46 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 .badge:empty,.badge[data-n="0"]{display:none}
 
 /* ===================== Console layout ===================== */
-.console-grid{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:16px;padding:16px 20px 20px;max-width:1760px;margin:0 auto;min-height:calc(100vh - var(--header-h))}
+/* ----- Tabs ----- */
+.tabs{position:sticky;top:var(--header-h);z-index:4;display:flex;gap:2px;padding:0 20px;overflow-x:auto;scrollbar-width:none;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs [role=tab]{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 14px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--text-muted);font-weight:600;white-space:nowrap}
+.tabs [role=tab]:hover{background:transparent;color:var(--text)}
+.tabs [role=tab][aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs .badge{margin-left:0}
+.tab-dot{width:7px;height:7px;border-radius:50%;background:transparent}
+.tab-dot[data-state=fail]{background:var(--fail)}.tab-dot[data-state=warn]{background:var(--warn)}
+.page{max-width:1280px;margin:0 auto;padding:20px 20px 40px;min-height:calc(100vh - var(--header-h) - 46px)}
+.panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel:focus-visible{outline:none}
+.panel.narrow{max-width:820px}
+.stage{display:flex;flex-direction:column;gap:12px;min-width:0}
+.node-box{font-size:.875rem}
+.node-box > summary{cursor:pointer;color:var(--text-muted);font-size:.8125rem}
+/* ----- Answer panel ----- */
+.answer{padding:16px 18px;border-left:3px solid var(--accent);background:var(--surface);border-radius:var(--r);min-width:0}
+.answer[data-state=failed]{border-left-color:var(--fail);background:var(--fail-bg)}
+.answer[data-state=local]{border-left-color:var(--warn)}
+.answer-q{margin:0 0 8px;color:var(--text-muted);font-size:.875rem;overflow-wrap:anywhere}
+.answer-q::before{content:"Soru: ";font-weight:700}
+.answer-state{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:.8125rem;color:var(--warn)}
+.answer-state:empty,.answer-state[hidden]{display:none}
+.answer[data-state=failed] .answer-state{color:var(--fail);font-weight:700}
+.spinner{width:14px;height:14px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+.answer-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:1rem;line-height:1.6;color:var(--text)}
+.answer-text:empty{display:none}
+.answer-meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:12px;font-size:.75rem;color:var(--text-muted)}
+.answer-meta:empty{display:none}
+.answer-meta button{min-height:28px;padding:2px 10px;border-radius:var(--pill);border-color:var(--line);font-size:.75rem;font-weight:500}
+.pill{display:inline-block;padding:2px 9px;border-radius:var(--pill);background:var(--surface-3);font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}
+.pill[data-state=ok]{background:var(--ok-bg);color:var(--ok)}.pill[data-state=warn]{background:var(--warn-bg);color:var(--warn)}.pill[data-state=fail]{background:var(--fail-bg);color:var(--fail);font-weight:700}
+.history ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.history li{padding:8px 0;border-bottom:1px solid var(--line);font-size:.875rem;overflow-wrap:anywhere}
+.history li[data-state=failed] .h-a{color:var(--fail)}
+.h-q{font-weight:600;color:var(--text)}.h-a{color:var(--text-muted);white-space:pre-wrap;margin-top:2px}
+.auto-line{display:flex;align-items:center;gap:8px;margin:0}
+.hint{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid var(--line-strong);border-radius:50%;font-size:.75rem;color:var(--text-muted);cursor:help}
+.restart{margin:0;padding:6px 10px;border-radius:var(--r-sm);background:var(--warn-bg);color:var(--warn);font-size:.8125rem;font-weight:600}
 .core{display:flex;flex-direction:column;gap:12px;min-width:0}
 .core-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
@@ -134,7 +173,7 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 .view-tools button{min-height:32px;padding:4px 10px;font-size:.8125rem}
 
 /* ----- The core scene (hero) ----- */
-.scene{position:relative;flex:1 1 auto;min-height:440px;height:calc(100vh - var(--header-h) - 230px);max-height:900px;overflow:hidden;border-radius:var(--r-lg);background:var(--scene-bg);border:1px solid rgba(95,212,244,.22);box-shadow:var(--glow)}
+.scene{position:relative;flex:1 1 auto;min-height:420px;height:calc(100vh - var(--header-h) - 200px);max-height:900px;overflow:hidden;border-radius:var(--r-lg);background:var(--scene-bg);border:1px solid rgba(95,212,244,.22);box-shadow:var(--glow)}
 .scene::before,.scene::after{content:"";position:absolute;width:28px;height:28px;pointer-events:none;border:1px solid rgba(155,230,251,.55)}
 .scene::before{top:10px;left:10px;border-right:0;border-bottom:0}
 .scene::after{bottom:10px;right:10px;border-left:0;border-top:0}
@@ -164,13 +203,12 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 .chips button{min-height:30px;padding:3px 10px;border-radius:var(--pill);border-color:var(--line);font-family:var(--font-mono);font-size:.75rem;font-weight:500;color:var(--text-muted)}
 
 /* ===================== Rail ===================== */
-.rail{display:flex;flex-direction:column;gap:14px;min-width:0;max-height:calc(100vh - var(--header-h) - 36px);overflow:auto;position:sticky;top:calc(var(--header-h) + 16px);padding-right:2px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;min-width:0}
 .card-head{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
 .card-head h2{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);font-weight:700}
 .card-head .meta{margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)}
-.status-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.st{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2);min-width:0}
+.status-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.st{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border:1px solid transparent;border-radius:var(--r-sm);background:var(--surface);min-width:0}
 .st-k{display:flex;align-items:center;gap:6px;font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .st-val{font-family:var(--font-mono);font-size:.8125rem;color:var(--text);overflow-wrap:anywhere}
 .st-note{font-size:.6875rem;color:var(--text-muted);overflow-wrap:anywhere}
@@ -186,8 +224,8 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 
 /* ----- Approval cards & item rows ----- */
 .gate-note{font-size:.75rem;color:var(--text-muted);margin:0 0 8px}
-.empty{font-size:.8125rem;color:var(--text-muted);padding:10px;border:1px dashed var(--line);border-radius:var(--r-sm);margin:0}
-.item{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface-2);overflow-wrap:anywhere}
+.empty{font-size:.8125rem;color:var(--text-muted);padding:4px 0;margin:0}
+.item{margin:6px 0;padding:10px 12px;border:0;border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface);overflow-wrap:anywhere}
 .item-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
 .item-status{margin-left:auto;font-family:var(--font-mono);text-transform:none;letter-spacing:0;padding:1px 7px;border-radius:var(--pill);background:var(--surface-3)}
 .item-title{margin:4px 0 0;color:var(--text);font-weight:600;font-size:.875rem}
@@ -202,7 +240,7 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 [data-status=rejected],[data-status=rolled_back]{border-left-color:var(--notrun)}
 
 /* ----- Activity feed ----- */
-.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto}
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:420px;overflow:auto}
 .feed li{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:baseline;font-size:.8125rem;padding:4px 0;border-bottom:1px solid var(--line)}
 .feed time{font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)}
 .feed .fdot{width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translateY(-1px)}
@@ -211,7 +249,7 @@ button.primary:hover{background:var(--accent-strong);border-color:var(--accent-s
 .ftext{overflow-wrap:anywhere}
 #msg{font-size:.8125rem;color:var(--accent);min-height:1.2em;margin:0 0 6px}
 #jobs{display:flex;flex-direction:column;gap:4px}
-.job{font-size:.8125rem;padding:5px 10px;border:1px solid var(--line);border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface-2);overflow-wrap:anywhere}
+.job{font-size:.8125rem;padding:5px 10px;border-left:3px solid var(--notrun);border-radius:var(--r-sm);background:var(--surface);overflow-wrap:anywhere}
 .job[data-status=running]{background:var(--warn-bg);color:var(--warn)}
 .job[data-status=failed]{color:var(--fail)}
 .sub-h{font-size:.6875rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:12px 0 6px;font-weight:700}
@@ -238,35 +276,25 @@ pre.console[data-alert=notrun]{border-color:var(--notrun)}
 pre.console[data-alert=notrun]::before{content:"○ NOT RUN içeriyor";background:var(--notrun-bg);color:var(--notrun)}
 details.out > summary{cursor:pointer;font-size:.75rem;color:var(--text-muted);margin-top:8px}
 
-/* ===================== Gelişmiş drawer ===================== */
-dialog.drawer{margin:0 0 0 auto;padding:0;width:min(640px,100vw);max-width:100vw;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--text);overflow:auto}
-dialog.drawer::backdrop{background:rgba(2,6,12,.62)}
-.drawer-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
-.drawer-head h2{font-size:1rem;letter-spacing:.08em}
-.drawer-head button{margin-left:auto}
-.drawer-body{padding:12px 20px 32px}
-.safety{display:flex;gap:8px;align-items:flex-start;font-size:.8125rem;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn);border-left-width:3px;padding:8px 12px;border-radius:var(--r-sm);margin:10px 0}
-.safety svg{flex:none;margin-top:3px}
-details.tool{border:1px solid var(--line);border-radius:var(--r);margin:10px 0;background:var(--surface)}
-details.tool > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;font-weight:600;font-size:.9375rem}
+/* ===================== Araçlar ===================== */
+details.tool{border-bottom:1px solid var(--line);margin:0}
+details.tool > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:14px 4px;font-weight:600;font-size:.9375rem}
 details.tool > summary::-webkit-details-marker{display:none}
 details.tool > summary::before{content:"";width:7px;height:7px;border-right:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);transform:rotate(-45deg);transition:transform .15s;flex:none}
 details.tool[open] > summary::before{transform:rotate(45deg)}
 details.tool > summary .tag{margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--accent);border:1px solid var(--line);padding:1px 7px;border-radius:var(--pill);font-weight:500}
-.tool-body{padding:0 14px 14px}
+.tool-body{padding:0 4px 18px}
 .tool-body h3{font-size:.6875rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:16px 0 4px}
 
 /* ===================== Responsive ===================== */
 @media (max-width:1080px){
-  .console-grid{grid-template-columns:1fr}
-  .rail{position:static;max-height:none;overflow:visible}
   .scene{height:62vh;min-height:340px}
 }
 @media (max-width:560px){
   .topbar{padding:8px 16px}
-  .brand-sub{display:none}
-  .console-grid{padding:12px 16px 16px;gap:12px}
-  .scene{height:52vh;min-height:300px}
+  .tabs{padding:0 8px}
+  .tabs [role=tab]{padding:8px 10px}
+  .page{padding:14px 16px 28px}
   .tip{display:none}
   .hud{left:16px;top:12px}
   /* phone: overlays move below the canvas so they never cover the network */
@@ -278,8 +306,14 @@ details.tool > summary .tag{margin-left:auto;font-family:var(--font-mono);font-s
   .xor label{display:none}
   .view-tools{margin-left:0}
   .status-list{grid-template-columns:1fr 1fr}
-  .drawer-head,.drawer-body{padding-left:16px;padding-right:16px}
   .actions button{flex:1 1 100%}
+  .cmd-row{padding-left:10px}
+  .top-actions button{padding:5px 8px}
+  .topbar{flex-wrap:nowrap;gap:8px}
+  .brand-name{letter-spacing:.2em}
+  .conn{padding:4px 8px;white-space:nowrap}
+  .top-actions button{white-space:nowrap}
+  #connText{font-size:.6875rem}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){
@@ -298,219 +332,217 @@ details.tool > summary .tag{margin-left:auto;font-family:var(--font-mono);font-s
 <header class="topbar">
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="16" cy="16" r="14" opacity=".25"/><g class="orbit"><circle cx="16" cy="16" r="10" stroke-dasharray="3 5" opacity=".7"/></g><circle cx="16" cy="16" r="3.4" fill="currentColor"/><circle cx="7" cy="9" r="1.8"/><circle cx="25" cy="9" r="1.8"/><circle cx="16" cy="28" r="1.8"/><path d="M8.5 10.2l5 3.6M23.5 10.2l-5 3.6M16 19.6v6.6" opacity=".7"/></g></svg>
-    <div><span class="brand-name">AXIS</span><span class="brand-sub">Yerel araştırma ve öğrenme konsolu</span></div>
+    <span class="brand-name">AXIS</span>
   </div>
   <div class="conn" id="conn" data-state="unknown" role="status"><span class="dot" aria-hidden="true"></span><span id="connText">Bağlanıyor…</span></div>
   <div class="top-actions">
-    <button type="button" id="themeBtn" class="ghost">Tema: Otomatik</button>
-    <button type="button" id="advBtn" aria-haspopup="dialog" aria-controls="adv">Gelişmiş</button>
+    <button type="button" id="themeBtn" class="ghost" title="Tema">◐ Otomatik</button>
   </div>
 </header>
 
-<main id="main" class="console-grid">
-  <!-- ============ Core: live neural / knowledge view ============ -->
-  <section class="core" aria-labelledby="coreTitle">
-    <h1 id="coreTitle" class="visually-hidden">AXIS çekirdek görünümü</h1>
-    <div class="core-head">
-      <div class="seg" role="group" aria-label="Çekirdek görünümü">
-        <button type="button" data-mode="neural" aria-pressed="true">Sinir ağı</button>
-        <button type="button" data-mode="knowledge" aria-pressed="false">Bilgi ağı</button>
-        <button type="button" data-mode="skills" aria-pressed="false">Beceri ağı</button>
-        <button type="button" data-mode="learning" aria-pressed="false">Öğrenme 2B</button>
-      </div>
-      <fieldset class="xor" id="xorBox"><legend class="visually-hidden">XOR girdileri</legend><span aria-hidden="true">Girdi</span>
-        <span class="xor-pairs" role="group" aria-label="Hazır girdi çiftleri (a, b)">
-          <button type="button" data-xor="0,0" aria-pressed="false" aria-label="a=0, b=0">0 0</button><button type="button" data-xor="0,1" aria-pressed="false" aria-label="a=0, b=1">0 1</button><button type="button" data-xor="1,0" aria-pressed="true" aria-label="a=1, b=0">1 0</button><button type="button" data-xor="1,1" aria-pressed="false" aria-label="a=1, b=1">1 1</button>
-        </span>
-        <label for="xorA">a <select id="xorA"><option value="0">0</option><option value="1" selected>1</option></select></label>
-        <label for="xorB">b <select id="xorB"><option value="0" selected>0</option><option value="1">1</option></select></label>
-      </fieldset>
-      <div class="view-tools">
-        <button type="button" id="home" class="ghost">Görünümü sıfırla</button>
-        <button type="button" id="rotate" class="ghost" aria-pressed="false">Döndür: Kapalı</button>
-      </div>
-    </div>
+<nav class="tabs" role="tablist" aria-label="Bölümler" id="tabs">
+  <button type="button" role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="true" data-tab="chat">Sohbet</button>
+  <button type="button" role="tab" id="tab-neural" aria-controls="panel-neural" aria-selected="false" tabindex="-1" data-tab="neural">Sinir ağı</button>
+  <button type="button" role="tab" id="tab-memory" aria-controls="panel-memory" aria-selected="false" tabindex="-1" data-tab="memory">Bellek</button>
+  <button type="button" role="tab" id="tab-updates" aria-controls="panel-updates" aria-selected="false" tabindex="-1" data-tab="updates">Güncellemeler<span class="badge" id="apprCount" data-n="0"></span></button>
+  <button type="button" role="tab" id="tab-system" aria-controls="panel-system" aria-selected="false" tabindex="-1" data-tab="system">Sistem<span class="tab-dot" id="sysDot" data-state="unknown" aria-hidden="true"></span></button>
+  <button type="button" role="tab" id="tab-tools" aria-controls="panel-tools" aria-selected="false" tabindex="-1" data-tab="tools">Araçlar</button>
+</nav>
 
-    <div id="scene" class="scene">
-      <canvas id="c" tabindex="0" role="img" aria-label="AXIS çekirdeğinin 3B görünümü. Ok tuşları: döndür, artı/eksi: yakınlaştır. Düğüm seçmek için fareyle tıkla.">Tarayıcın canvas desteklemiyor. “Öğrenme 2B” görünümünü kullanabilirsin.</canvas>
-      <svg id="axis-v13-graph" viewBox="0 0 700 290" role="img" aria-label="AXIS öğrenme ağı (2B): ajanlar, görevler ve dersler" hidden></svg>
-      <div class="hud"><span class="hud-mode" id="modeTitle">Sinir ağı · XOR</span><span id="counts" aria-live="polite">Veriler yükleniyor…</span><span id="axis-v13-summary" hidden></span><span class="hud-note" id="hudNote"></span></div>
-      <div class="readout" id="neuralReadout" data-state="unknown" aria-live="polite">
-        <div class="ro-eq"><span id="roEq">a ⊕ b</span></div>
-        <div class="ro-out"><span class="ro-k">Tahmin</span><span id="roPred" class="ro-big">—</span><span class="ro-k">Beklenen</span><span id="roExp" class="ro-big">—</span></div>
-        <div class="ro-meta" id="roMeta">Sinir ağı yükleniyor…</div>
-        <div class="ro-flag" id="roFlag"></div>
-      </div>
-      <div class="legend" id="legend" aria-label="Lejant"></div>
-      <div class="tip" id="tip">Sürükle: döndür · Tekerlek: yakınlaştır · Tıkla: ayrıntı</div>
-    </div>
+<main id="main" class="page">
+  <h1 class="visually-hidden">AXIS</h1>
 
+  <!-- ============ Sohbet ============ -->
+  <section class="panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat" tabindex="0">
     <form id="cmd" class="cmd" autocomplete="off">
-      <label class="cmd-label" for="cmdInput">Ne yapmamı istersin?</label>
+      <label class="cmd-label" for="cmdInput">Sor ya da komut ver</label>
       <div class="cmd-row">
         <span class="cmd-prompt" aria-hidden="true">›</span>
-        <input id="cmdInput" name="cmd" placeholder="Örn. araştır yapay sinir ağları · durum · sinir ağı a=1 b=0" aria-describedby="intent cmdHelp" enterkeyhint="go">
-        <button type="submit" class="primary" id="cmdGo">Çalıştır</button>
+        <input id="cmdInput" name="cmd" placeholder="Örn. Bellekte neler var? · araştır yapay sinir ağları" aria-describedby="intent cmdHelp" enterkeyhint="go" maxlength="2000">
+        <button type="submit" class="primary" id="cmdGo">Gönder</button>
       </div>
-      <div class="intent" id="intent" aria-live="polite"><span>Seçilecek eylem:</span><b id="intentName">—</b><span id="intentPath"></span></div>
-      <p id="cmdHelp" class="visually-hidden">Komut yazıp Enter'a bas. Tanınmayan metin literatür araştırması olarak çalışır. Kalıcı değişiklik yapan işlemler komut satırından yapılmaz; Gelişmiş araçlar ve Onay bekliyor kartları kullanılır.</p>
+      <div class="intent" id="intent" aria-live="polite"><b id="intentName">—</b><span id="intentPath"></span></div>
+      <p id="cmdHelp" class="visually-hidden">Soru yaz ve Enter'a bas; yerel model yanıtlar. Literatür araması için «araştır konu». AXIS komut satırından hiçbir şey uygulamaz veya onaylamaz.</p>
       <div class="chips" aria-label="Hızlı komutlar">
-        <button type="button" data-cmd="durum">durum</button>
-        <button type="button" data-cmd="öneriler">öneriler</button>
-        <button type="button" data-cmd="sinir ağı a=1 b=0">sinir ağı a=1 b=0</button>
+        <button type="button" data-cmd="Bellekte neler var?">Bellekte neler var?</button>
         <button type="button" data-cmd="araştır " data-fill="1">araştır …</button>
         <button type="button" data-cmd="hafızada ara " data-fill="1">hafızada ara …</button>
-        <button type="button" data-cmd="yardım">yardım</button>
+        <button type="button" data-cmd="durum">durum</button>
+        <button type="button" data-cmd="yardım" title="Tüm komutlar">?</button>
       </div>
     </form>
+
+    <section class="answer" id="answer" aria-live="polite" aria-labelledby="answerQ" hidden>
+      <p class="answer-q" id="answerQ"></p>
+      <div class="answer-state" id="answerState"><span class="spinner" aria-hidden="true"></span><span id="answerWait"></span></div>
+      <div class="answer-text" id="answerText"></div>
+      <div class="answer-meta" id="answerMeta"></div>
+    </section>
+    <section class="history" aria-labelledby="hHist" id="historyWrap" hidden>
+      <h2 class="sub-h" id="hHist">Önceki sorular</h2>
+      <ol id="askHistory"></ol>
+    </section>
   </section>
 
-  <!-- ============ Rail: status, approvals, node, activity ============ -->
-  <aside class="rail" aria-label="Durum ve etkinlik">
-    <section class="card" aria-labelledby="hStatus">
-      <div class="card-head"><h2 id="hStatus">Sistem durumu</h2><span class="meta" id="stamp">—</span></div>
-      <ul class="status-list" id="statusRail">
-        <li class="st" id="st-server" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sunucu</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-ollama" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ollama</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-model" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Model</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker sandbox</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma işleri</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bilgi düğümü</span><span class="st-val">—</span><span class="st-note"></span></li>
-        <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Onay bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
-      </ul>
-      <p class="auto-note">Otomatik yenileme: <span id="pollState">açık</span> · sekme gizliyken duraklar · yalnız okuma</p>
-    </section>
+  <!-- ============ Sinir ağı (stage lives here by default; moved to Bellek when that tab opens) ============ -->
+  <section class="panel" id="panel-neural" role="tabpanel" aria-labelledby="tab-neural" tabindex="0" hidden>
+    <div class="stage-slot" id="slot-neural">
+      <div id="stage" class="stage">
+        <div class="core-head">
+          <div class="seg" id="memSeg" role="group" aria-label="Görünüm">
+            <button type="button" data-mode="neural" aria-pressed="true" hidden>Sinir ağı</button>
+            <button type="button" data-mode="knowledge" aria-pressed="false">Bilgi ağı</button>
+            <button type="button" data-mode="skills" aria-pressed="false">Beceri ağı</button>
+            <button type="button" data-mode="learning" aria-pressed="false">Öğrenme</button>
+          </div>
+          <fieldset class="xor" id="xorBox"><legend class="visually-hidden">XOR girdileri</legend><span aria-hidden="true">Girdi</span>
+            <span class="xor-pairs" role="group" aria-label="Hazır girdi çiftleri (a, b)">
+              <button type="button" data-xor="0,0" aria-pressed="false" aria-label="a=0, b=0">0 0</button><button type="button" data-xor="0,1" aria-pressed="false" aria-label="a=0, b=1">0 1</button><button type="button" data-xor="1,0" aria-pressed="true" aria-label="a=1, b=0">1 0</button><button type="button" data-xor="1,1" aria-pressed="false" aria-label="a=1, b=1">1 1</button>
+            </span>
+            <label for="xorA">a <select id="xorA"><option value="0">0</option><option value="1" selected>1</option></select></label>
+            <label for="xorB">b <select id="xorB"><option value="0" selected>0</option><option value="1">1</option></select></label>
+          </fieldset>
+          <div class="view-tools">
+            <button type="button" id="home" class="ghost" title="Görünümü sıfırla">Sıfırla</button>
+            <button type="button" id="rotate" class="ghost" aria-pressed="false">Döndür: Kapalı</button>
+          </div>
+        </div>
+        <div id="scene" class="scene">
+          <canvas id="c" tabindex="0" role="img" aria-label="AXIS 3B görünüm. Ok tuşları: döndür, artı/eksi: yakınlaştır. Düğüm seçmek için tıkla.">Tarayıcın canvas desteklemiyor.</canvas>
+          <svg id="axis-v13-graph" viewBox="0 0 700 290" role="img" aria-label="Öğrenme ağı (2B): ajanlar, görevler ve dersler" hidden></svg>
+          <div class="hud"><span class="hud-mode" id="modeTitle">Sinir ağı · XOR</span><span id="counts" aria-live="polite">Yükleniyor…</span><span id="axis-v13-summary" hidden></span><span class="hud-note" id="hudNote"></span></div>
+          <div class="readout" id="neuralReadout" data-state="unknown" aria-live="polite">
+            <div class="ro-eq"><span id="roEq">a ⊕ b</span></div>
+            <div class="ro-out"><span class="ro-k">Tahmin</span><span id="roPred" class="ro-big">—</span><span class="ro-k">Beklenen</span><span id="roExp" class="ro-big">—</span></div>
+            <div class="ro-meta" id="roMeta">Yükleniyor…</div>
+            <div class="ro-flag" id="roFlag"></div>
+          </div>
+          <div class="legend" id="legend" aria-label="Lejant"></div>
+          <div class="tip" id="tip">Sürükle: döndür · Tekerlek: yakınlaştır · Tıkla: ayrıntı</div>
+        </div>
+        <details class="node-box" id="nodeBox"><summary>Seçilen düğüm</summary><div id="details" aria-live="polite"><p>Bir düğüme tıkla.</p></div></details>
+      </div>
+    </div>
+  </section>
 
-    <section class="card" id="approvals" aria-labelledby="hAppr" tabindex="-1">
-      <div class="card-head"><h2 id="hAppr">Onay bekliyor</h2><span class="badge" id="apprCount" data-n="0"></span></div>
-      <p class="gate-note">AXIS hiçbir şeyi kendiliğinden onaylamaz. Her onay tarayıcı onay penceresi ve sunucu tarafında açık onay metni ister.</p>
-      <p class="empty" id="apprEmpty">Şu an onay bekleyen öneri yok.</p>
-      <div id="apSkill"></div><div id="apUpgrade"></div><div id="apAgent"></div><div id="apBrain"></div>
-    </section>
+  <!-- ============ Bellek ============ -->
+  <section class="panel" id="panel-memory" role="tabpanel" aria-labelledby="tab-memory" tabindex="0" hidden>
+    <div class="stage-slot" id="slot-memory"></div>
+    <h2 class="sub-h">Son araştırmalar</h2>
+    <div id="jobs"></div>
+  </section>
 
-    <section class="card" aria-labelledby="hNode">
-      <div class="card-head"><h2 id="hNode">Seçilen düğüm</h2></div>
-      <div id="details" aria-live="polite"><p>Çekirdekte bir düğüme tıkla; açıklaması ve kaynak bağlantıları burada görünür.</p></div>
-    </section>
+  <!-- ============ Güncellemeler ============ -->
+  <section class="panel narrow" id="panel-updates" role="tabpanel" aria-labelledby="tab-updates" tabindex="0" hidden>
+    <div id="approvals" tabindex="-1">
+      <p class="auto-line"><span class="pill" id="autoMode" data-state="unknown">Otomatik güncelleme: —</span>
+        <span class="hint" title="Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa uygulanır. Korunan dosyalar: vector_upgrade.py, local_models.py, server.py, axis_sqlite.py, test_*.py. Kapatmak için sunucuyu AXIS_AUTO_APPLY=0 ile başlat.">?</span></p>
+      <p class="gate-note">Docker testi PASS olmadan hiçbir çekirdek güncelleme uygulanmaz. Diğer öneriler senin onayını bekler.</p>
+      <p class="restart" id="restartNote" hidden>Yeniden başlatma gerekli: değişiklik sunucu yeniden başlatılınca etkin olur.</p>
+      <h2 class="sub-h">Son otomatik güncellemeler</h2>
+      <div id="apAuto"><p class="empty">Henüz otomatik güncelleme yok.</p></div>
+      <h2 class="sub-h">Bekleyen</h2>
+      <p class="empty" id="apprEmpty">Onay bekleyen öneri yok.</p>
+      <div id="apUpgrade"></div><div id="apSkill"></div><div id="apAgent"></div><div id="apBrain"></div>
+      <pre id="updOut" class="console" aria-live="polite"></pre>
+    </div>
+  </section>
 
-    <section class="card" aria-labelledby="hFeed">
-      <div class="card-head"><h2 id="hFeed">Etkinlik</h2></div>
-      <p id="msg" role="status" aria-live="polite"></p>
-      <ol class="feed" id="feed" aria-label="Etkinlik akışı"></ol>
-      <h3 class="sub-h">Son araştırmalar</h3>
-      <div id="jobs"></div>
-      <details class="out" id="cmdOutWrap"><summary>Son sonuç (ham çıktı)</summary><pre id="cmdOut" class="console" aria-live="polite"></pre></details>
-    </section>
-  </aside>
-</main>
+  <!-- ============ Sistem ============ -->
+  <section class="panel narrow" id="panel-system" role="tabpanel" aria-labelledby="tab-system" tabindex="0" hidden>
+    <ul class="status-list" id="statusRail">
+      <li class="st" id="st-server" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sunucu</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-ollama" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ollama</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-model" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Model</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
+      <li class="st" id="st-autoupd" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Otomatik güncelleme</span><span class="st-val">—</span><span class="st-note"></span></li>
+    </ul>
+    <p class="auto-note">Yenileme: <span id="pollState">açık</span> · <span id="stamp">—</span></p>
+    <h2 class="sub-h">Etkinlik</h2>
+    <p id="msg" role="status" aria-live="polite"></p>
+    <ol class="feed" id="feed" aria-label="Etkinlik akışı"></ol>
+    <details class="out" id="cmdOutWrap"><summary>Son ham çıktı</summary><pre id="cmdOut" class="console" aria-live="polite"></pre></details>
+  </section>
 
-<!-- ============ Gelişmiş drawer: every write / agent / Docker tool lives here ============ -->
-<dialog id="adv" class="drawer" aria-labelledby="advTitle">
-  <div class="drawer-head"><h2 id="advTitle">Gelişmiş araçlar</h2><button type="button" id="advClose">Kapat</button></div>
-  <div class="drawer-body">
-    <p class="safety"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1l7 13H1zM7.25 6v4h1.5V6zm0 5v1.5h1.5V11z"/></svg><span>Buradaki araçlar dosya yazar, ajan veya Docker testi çalıştırır. Hiçbiri otomatik çalışmaz; onay gerektirenler açık onay ister.</span></p>
+  <!-- ============ Araçlar (former Gelişmiş drawer) ============ -->
+  <section class="panel narrow" id="panel-tools" role="tabpanel" aria-labelledby="tab-tools" tabindex="0" hidden>
+    <p class="gate-note">Bu araçlar dosya yazabilir; hiçbiri kendiliğinden çalışmaz.</p>
 
     <details class="tool" id="panel-v4">
-      <summary>Araştırma araçları<span class="tag">V4</span></summary>
+      <summary>Araştırma</summary>
       <div class="tool-body">
-        <p>Kaynakları sentezle · PDF yükle · LLM ile beceri öner · Paralel araçları çalıştır</p>
-        <label for="v4topic">Araştırma konusu</label><input id="v4topic" placeholder="Daha önce araştırdığın konu">
-        <div class="actions"><button type="button" data-act="v4synth">Kaynaklardan literatür sentezi üret</button></div>
-        <h3>PDF belgesi ekle</h3>
-        <label for="v4pdf" class="visually-hidden">PDF dosyası</label><input type="file" id="v4pdf" accept=".pdf,application/pdf">
-        <div class="actions"><button type="button" data-act="v4upload">PDF metnini bilgi ağına ekle</button></div>
-        <h3>AXIS yeni beceri önersin</h3>
-        <div class="field-row"><div><label for="v4skill">Beceri adı</label><input id="v4skill" placeholder="Beceri adı: sayi_ozetle"></div><div><label for="v4desc">Beceri ne yapsın?</label><input id="v4desc" placeholder="Beceri ne yapsın?"></div></div>
-        <div class="actions"><button type="button" data-act="v4generate">Kod önerisi üret (onay gerektirir)</button></div>
-        <h3>Paralel araçlar</h3>
-        <label for="v4query">Hafızada aranacak kavram</label><input id="v4query" placeholder="Hafızada aranacak kavram">
-        <div class="actions"><button type="button" data-act="v4parallel">3 aracı aynı anda çalıştır</button></div>
+        <label for="v4topic">Sentez konusu</label><input id="v4topic" placeholder="Daha önce araştırdığın konu">
+        <div class="actions"><button type="button" data-act="v4synth">Literatür sentezi</button></div>
+        <label for="v4pdf">PDF ekle</label><input type="file" id="v4pdf" accept=".pdf,application/pdf">
+        <div class="actions"><button type="button" data-act="v4upload">PDF'i bilgi ağına ekle</button></div>
+        <label for="v4query">Hafızada ara</label><input id="v4query" placeholder="Kavram">
+        <div class="actions"><button type="button" data-act="v4parallel">3 aracı paralel çalıştır</button></div>
         <pre id="v4out" class="console" aria-live="polite"></pre>
       </div>
     </details>
 
     <details class="tool" id="panel-evolution">
-      <summary>Beceri dosyası öner<span class="tag">Self-Evolution</span></summary>
+      <summary>Beceri dosyaları</summary>
       <div class="tool-body">
-        <p class="safety"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1l7 13H1zM7.25 6v4h1.5V6zm0 5v1.5h1.5V11z"/></svg><span>Önerilen Python becerisi yalnızca <code>skills/</code> klasörüne kaydedilir. Kod otomatik çalıştırılmaz.</span></p>
-        <label for="skillName">Beceri adı</label><input id="skillName" placeholder="Beceri adı (örn: hesapla)">
+        <div class="field-row"><div><label for="v4skill">Beceri adı (LLM)</label><input id="v4skill" placeholder="sayi_ozetle"></div><div><label for="v4desc">Ne yapsın?</label><input id="v4desc" placeholder="Açıklama"></div></div>
+        <div class="actions"><button type="button" data-act="v4generate">LLM ile kod öner</button></div>
+        <label for="skillName">Beceri adı</label><input id="skillName" placeholder="hesapla">
         <label for="skillCode">Python kodu</label><textarea id="skillCode" rows="5" placeholder="def run(data):&#10;    return data"></textarea>
-        <label for="skillSummary">Değişiklik açıklaması</label><input id="skillSummary" placeholder="Değişiklik açıklaması">
-        <div class="actions"><button type="button" class="primary" data-act="proposeSkill">Değişiklik öner</button><button type="button" data-act="refreshProposals">Önerileri yenile</button></div>
+        <label for="skillSummary">Açıklama</label><input id="skillSummary" placeholder="Değişiklik açıklaması">
+        <div class="actions"><button type="button" class="primary" data-act="proposeSkill">Öner</button><button type="button" data-act="refreshProposals">Yenile</button></div>
         <pre id="evolutionOutput" class="console" aria-live="polite"></pre>
-        <h3>Tüm beceri önerileri</h3><div id="proposals"></div>
+        <div id="proposals"></div>
       </div>
     </details>
 
     <details class="tool" id="panel-v5">
-      <summary>Çekirdek güncelleme ve Docker testi<span class="tag">V5</span></summary>
+      <summary>Çekirdek güncellemeler</summary>
       <div class="tool-body">
-        <p class="safety"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1l7 13H1zM7.25 6v4h1.5V6zm0 5v1.5h1.5V11z"/></svg><span>Yalnızca vector_intelligence.py, research_extensions.py, skills_helpers.py güncellenebilir. Test Docker içinde ağsız ve sınırlı kaynaklarla yapılır. Onay verilmeden değişiklik uygulanmaz.</span></p>
-        <label for="v5target">Hedef modül</label><input id="v5target" value="research_extensions.py" placeholder="Hedef modül">
-        <label for="v5code">Önerilen Python kodu</label><textarea id="v5code" rows="7" placeholder="Önerilen Python kodu"></textarea>
-        <label for="v5desc">Değişiklik açıklaması</label><input id="v5desc" placeholder="Değişiklik açıklaması">
-        <div class="actions"><button type="button" class="primary" data-act="v5propose">Güncelleme önerisi oluştur</button><button type="button" data-act="v5list">Önerileri listele</button></div>
+        <label for="v5target">Hedef modül</label><input id="v5target" value="research_extensions.py" placeholder="modul.py" title="AXIS üst düzey .py; korunan dosyalar ve test_*.py hariç">
+        <label for="v5code">Python kodu</label><textarea id="v5code" rows="7" placeholder="Önerilen kod"></textarea>
+        <label for="v5desc">Açıklama</label><input id="v5desc" placeholder="Değişiklik açıklaması">
+        <div class="actions"><button type="button" class="primary" data-act="v5propose">Öner (PASS ise otomatik uygulanır)</button><button type="button" data-act="v5list">Yenile</button></div>
         <pre id="v5out" class="console" aria-live="polite"></pre>
-        <h3>Güncellemeler (geri alma dahil)</h3><div id="v5items"></div>
+        <div id="v5items"></div>
       </div>
     </details>
 
     <details class="tool" id="panel-v7">
-      <summary>Çok ajanlı geliştirme<span class="tag">V7</span></summary>
+      <summary>Ajanlar</summary>
       <div class="tool-body">
-        <p>Planlayıcı → Kod yazarı → İnceleyici → Docker testi → Senin açık onayın. Ollama çalışmalı.</p>
         <label for="agentRequest">Geliştirme isteği</label>
-        <textarea id="agentRequest" rows="4" placeholder="Örn: Metinleri güvenli şekilde özetleyen saf bir Python fonksiyonu oluştur"></textarea>
+        <textarea id="agentRequest" rows="3" placeholder="Örn. metinleri özetleyen saf bir Python fonksiyonu"></textarea>
         <label for="agentTarget">Hedef modül</label>
         <select id="agentTarget"><option>research_extensions.py</option><option>skills_helpers.py</option></select>
-        <div class="actions"><button type="button" id="agentStart" class="primary" data-act="agentRun">Ajanları çalıştır ve öneriyi hazırla</button><button type="button" data-act="agentList">Geçmiş önerileri göster</button></div>
+        <div class="actions"><button type="button" id="agentStart" class="primary" data-act="agentRun">Ajanları çalıştır</button><button type="button" data-act="agentList">Geçmiş</button></div>
         <pre id="agentOutput" class="console" aria-live="polite"></pre>
-        <p class="safety"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1l7 13H1zM7.25 6v4h1.5V6zm0 5v1.5h1.5V11z"/></svg><span>Bu bölüm onay vermeden hiçbir güncellemeyi uygulamaz. Docker testi ve onay “Onay bekliyor” kartlarında veya Çekirdek güncelleme bölümündedir.</span></p>
-      </div>
-    </details>
-
-    <details class="tool" id="panel-v9">
-      <summary>Ajan keşfi ve yetenek taraması<span class="tag">V9</span></summary>
-      <div class="tool-body">
-        <p>Görevini tara, mevcut uzmanları bul, eksik uzman rolleri için onay ver. Onay, dışarıdan kod/model indirmez veya bilgisayarında yeni yazılım kurmaz.</p>
-        <label for="v9task">Görev</label><textarea id="v9task" rows="3" placeholder="Örnek: Fotoğrafları analiz et, araştırma yap ve rapor hazırla"></textarea>
-        <div class="actions"><button type="button" class="primary" data-act="v9scan">Yetenekleri tara</button><button type="button" data-act="v9parallel">Paralel hafıza analizi</button><button type="button" data-act="v9health">Sistem kontrolü</button><button type="button" data-act="v9list">Ajan önerilerini göster</button></div>
+        <label for="v9task">Yetenek taraması</label><textarea id="v9task" rows="2" placeholder="Görev"></textarea>
+        <div class="actions"><button type="button" data-act="v9scan">Tara</button><button type="button" data-act="v9parallel">Paralel analiz</button><button type="button" data-act="v9health">Sistem kontrolü</button><button type="button" data-act="v9list">Roller</button></div>
         <pre id="v9result" class="console" aria-live="polite"></pre><div id="v9agents"></div>
       </div>
     </details>
 
     <details class="tool" id="panel-v10">
-      <summary>Merkezi beyin öğrenmesi<span class="tag">V10</span></summary>
+      <summary>Öğrenilmiş beceriler</summary>
       <div class="tool-body">
-        <p>Ajan deneyimleri ortak hafızaya kaydedilir. Tekrarlanan başarılı deneyimlerden kanıtlı beceri önerisi oluşturulur. Beceri etkinleşmeden önce onayın gerekir. Bu sistem LLM ağırlıklarını değiştirmez.</p>
-        <div class="actions"><button type="button" data-act="brainLoad">Deneyimleri ve becerileri göster</button><button type="button" data-act="brainSuggest">Öğrenme adaylarını tara</button><button type="button" data-act="brainVisualize">Beceri ağını çekirdekte göster</button></div>
-        <div class="field-row"><div><label for="brainName">Yeni beceri adı</label><input id="brainName" placeholder="Yeni beceri adı"></div><div><label for="brainSteps">Araçlar</label><input id="brainSteps" placeholder="Araçlar: research,synthesize"></div></div>
-        <label for="brainEvidence">Başarılı deneyim ID'leri (virgülle)</label><input id="brainEvidence" placeholder="Başarılı deneyim ID'leri (virgülle)">
-        <div class="actions"><button type="button" class="primary" data-act="brainPropose">Kanıtlarla beceri öner</button></div>
+        <div class="actions"><button type="button" data-act="brainLoad">Deneyimler</button><button type="button" data-act="brainSuggest">Adayları tara</button><button type="button" data-act="brainVisualize">Beceri ağını göster</button></div>
+        <div class="field-row"><div><label for="brainName">Beceri adı</label><input id="brainName" placeholder="Ad"></div><div><label for="brainSteps">Araçlar</label><input id="brainSteps" placeholder="research,synthesize"></div></div>
+        <label for="brainEvidence">Deneyim ID'leri</label><input id="brainEvidence" placeholder="virgülle">
+        <div class="actions"><button type="button" class="primary" data-act="brainPropose">Öner</button></div>
         <pre id="brainOutput" class="console" aria-live="polite"></pre><div id="brainSkillList"></div>
-      </div>
-    </details>
-
-    <details class="tool" id="panel-v11">
-      <summary>Öğrenilmiş beceri yürütücüsü<span class="tag">V11</span></summary>
-      <div class="tool-body">
-        <p>Yalnızca onaylı, salt-okunur hafıza becerileri çalıştırılır. Kod veya sistem komutu çalıştırılmaz.</p>
-        <div class="actions"><button type="button" data-act="axisList">Onaylı becerileri listele</button></div>
+        <h3>Onaylı becerileri çalıştır</h3>
+        <div class="actions"><button type="button" data-act="axisList">Listele</button></div>
         <div id="axisSkills"></div>
-        <label for="axisQuery">Arama metni (search_memory için)</label><input id="axisQuery" placeholder="Kavram ara">
+        <label for="axisQuery">Arama metni</label><input id="axisQuery" placeholder="Kavram">
         <pre id="axisOutput" class="console" aria-live="polite"></pre>
       </div>
     </details>
-
-    <details class="tool" id="panel-about">
-      <summary>Bu sürümün sınırları</summary>
-      <div class="tool-body">
-        <p>Bilgi ağı gerçek SQLite kayıtlarından oluşur. Araştırma OpenAlex üzerinden başlık, yıl, DOI, özet ve kavram etiketlerini kaydeder; tam metin indirmez. 3B yerleşim görseldir; fiziksel nöron konumları değildir. Kavram etiketleri otomatik ilişkilerdir; bilimsel doğrulama veya yeni model eğitimi sayılmaz. Sinir ağı görünümü XOR üzerinde gerçekten eğitilmiş küçük bir ağdır (saf Python veya PyTorch arka ucu); AXIS'in dil modeli değildir.</p>
-      </div>
-    </details>
-  </div>
-</dialog>
+  </section>
+</main>
 
 <script>
 'use strict';
@@ -530,11 +562,13 @@ async function brainReq(path,data){return data?postJSON(path,data):getJSON(path)
 
 /* ---------------- Activity feed & status rail ---------------- */
 function feed(text,state,announce){const li=el('li');li.dataset.state=state||'info';li.append(el('time','',clock()),el('span','fdot'),el('span','ftext',text));const f=$('#feed');f.prepend(li);while(f.children.length>40)f.lastChild.remove();if(announce)$('#msg').textContent=text}
-function setSt(key,state,value,note){const li=$('#st-'+key);if(!li)return;li.dataset.state=state;li.querySelector('.st-val').textContent=value;li.querySelector('.st-note').textContent=note||''}
+function setSt(key,state,value,note){const li=$('#st-'+key);if(!li)return;li.dataset.state=state;li.querySelector('.st-val').textContent=value;li.querySelector('.st-note').textContent=note||'';
+  const states=[...document.querySelectorAll('#statusRail .st')].map(x=>x.dataset.state);const d=$('#sysDot');if(d)d.dataset.state=states.includes('fail')?'fail':states.includes('warn')?'warn':'ok'}
 let connOk=null;
 function setConn(ok){if(ok===connOk)return;connOk=ok;const c=$('#conn');c.dataset.state=ok?'ok':'fail';$('#connText').textContent=ok?'Çevrimiçi · yerel':'Bağlantı yok';setSt('server',ok?'ok':'fail',ok?'Bağlı':'Bağlantı yok',ok?location.host:'server.py çalışıyor mu?');if(!ok)feed('Sunucu bağlantısı kurulamadı','fail',true)}
 function stamp(){$('#stamp').textContent=clock()}
 function showOut(x){const o=$('#cmdOut');o.textContent=pretty(x);$('#cmdOutWrap').open=true}
+function updShow(x){const o=$('#updOut');o.textContent=pretty(x)}
 function statusLabel(s){return({pending:'Onay bekliyor',approved:'Onaylandı',applied:'Uygulandı',rejected:'Reddedildi',rolled_back:'Geri alındı',completed:'Tamamlandı',running:'Çalışıyor',failed:'FAILED'})[s]||String(s||'—')}
 function card(kind,title,meta,status){const d=el('div','item');d.dataset.status=status||'';const h=el('div','item-head');h.append(el('span','',kind),el('span','item-status',statusLabel(status)));d.append(h,el('p','item-title',title||'—'));if(meta)d.append(el('p','item-meta',meta));const acts=el('div','item-actions');d.append(acts);return {d,acts}}
 function btn(label,cls,fn){const b=el('button',cls||'',label);b.type='button';b.addEventListener('click',async()=>{b.disabled=true;try{await fn()}finally{b.disabled=false}});return b}
@@ -606,7 +640,10 @@ c.addEventListener('keydown',e=>{const k=e.key;let used=true;if(k==='ArrowLeft')
 c.addEventListener('click',async e=>{
   if(moved)return;const rect=c.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;
   const n=projected.map(p=>({...p,dist:Math.hypot(p.sx-x,p.sy-y)})).sort((p,q)=>p.dist-q.dist)[0];if(!n||n.dist>22)return;
-  selected=n.id;draw();const box=$('#details');box.replaceChildren();box.append(el('strong','',n.label),el('p','',n.description||n.kind));
+  await selectNode(n);
+});
+async function selectNode(n){
+  selected=n.id;draw();$('#nodeBox').open=true;const box=$('#details');box.replaceChildren();box.append(el('strong','',n.label),el('p','',n.description||n.kind));
   if(n.kind==='neuron'){const dl=el('dl','kv');const row=(k,v)=>{if(v!==undefined&&v!==null)dl.append(el('dt','',k),el('dd','',v))};row('Katman',n.layer);row('Sıra',n.index);row('Aktivasyon',n.activation);row('Ön aktivasyon',n.pre_activation);row('Bias',n.bias);row('Aktivasyon fonksiyonu',n.activation_fn);
     const inc=edges.filter(e=>nodes[e[1]]&&nodes[e[1]].id===n.id&&e[3]!==undefined).map(e=>nodes[e[0]].label+': '+e[3].toFixed(3));if(inc.length)row('Gelen sinyal',inc.join(' · '));box.append(dl)}
   if(mode!=='knowledge')return;
@@ -614,7 +651,14 @@ c.addEventListener('click',async e=>{
     if(!data.length)box.append(el('p','','Bu düğüme doğrudan bağlanan kaynak yok. Bağlantılı makaleleri incele.'));
     for(const s of data){const div=el('div','source');const a=el('a','',s.title+' ('+(s.year||'t.y.')+')');a.href=/^https:\/\//.test(s.url)?s.url:'#';a.target='_blank';a.rel='noopener noreferrer';div.append(a,el('p','',s.quote||'Özet bulunamadı'));box.append(div)}
   }catch(err){box.append(el('p','','Kaynaklar yüklenemedi'))}
-});
+}
+/* Select a node by id (from an answer's memory list): switch to the knowledge graph if needed. */
+async function selectNodeById(id){
+  switchTab('memory');if(mode!=='knowledge')await setMode('knowledge');else await loadGraph();
+  const n=nodes.find(x=>x.id===id);
+  if(!n){feed('Düğüm grafikte görünmüyor (yalnızca son 500 düğüm çizilir): '+id,'warn',true);return}
+  await selectNode(n);$('#scene').scrollIntoView({block:'nearest',behavior:RM.matches?'auto':'smooth'});
+}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe($('#scene'));
 window.addEventListener('resize',resize);
 
@@ -730,31 +774,45 @@ function proposalRow(x,out){
 }
 async function proposeSkill(){try{const d=await apiEvolution('/api/propose',{skill:$('#skillName').value,code:$('#skillCode').value,summary:$('#skillSummary').value});$('#evolutionOutput').textContent=d.test_result+'\n'+d.diff;feed('Beceri önerisi oluşturuldu (onay bekliyor)','warn');refreshProposals()}catch(e){alert(e.message)}}
 async function refreshProposals(){try{const data=await getJSON('/api/proposals');const root=$('#proposals'),rail=$('#apSkill');root.replaceChildren();rail.replaceChildren();let n=0;
-  for(const x of data){root.append(proposalRow(x,x2=>$('#evolutionOutput').textContent=JSON.stringify(x2,null,2)));if(x.status==='pending'){rail.append(proposalRow(x,showOut));n++}}
+  for(const x of data){root.append(proposalRow(x,x2=>$('#evolutionOutput').textContent=JSON.stringify(x2,null,2)));if(x.status==='pending'){rail.append(proposalRow(x,updShow));n++}}
   if(!data.length)root.append(el('p','empty','Henüz öneri yok.'));pend.skill=n;updatePending()}catch(e){$('#evolutionOutput').textContent=e.message}}
 
 /* ---------------- Core upgrades (V5) ---------------- */
 function v5show(x){$('#v5out').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
-function upgradeRow(item,show){
-  const [ds,dl]=dockerState(item.report);
-  const {d,acts}=card('Çekirdek güncelleme · '+item.target,item.description||item.target,'Docker testi: '+dl,item.status);
-  for(const [label,fn] of [
-    ['Farkı incele',async()=>{const x=await getJSON('/api/upgrade-detail?id='+encodeURIComponent(item.id));show(x)}],
-    ['Docker testi',async()=>{const x=await v5request('/api/upgrade-test',{id:item.id});show(x);feed('Docker testi '+(x.passed?'PASS':'FAILED')+': '+item.target,x.passed?'ok':'fail',true);v5list()}],
-    ['Onayla',async()=>{if(!confirm('Kod farkını ve testleri inceledin mi? Değişiklik uygulanacak.'))return;show(await v5request('/api/upgrade-decision',{id:item.id,action:'approve',confirmation:'ONAYLIYORUM'}));feed('Güncelleme onaylandı: '+item.target,'ok',true);v5list()}],
-    ['Reddet',async()=>{show(await v5request('/api/upgrade-decision',{id:item.id,action:'reject'}));feed('Güncelleme reddedildi: '+item.target,'notrun');v5list()}],
-    ['Geri al',async()=>{if(!confirm('Bu güncellemeyi geri almak istiyor musun?'))return;show(await v5request('/api/upgrade-rollback',{id:item.id,confirmation:'GERI_AL'}));feed('Güncelleme geri alındı: '+item.target,'warn',true);v5list()}]]){
-    if(label==='Geri al'&&item.status!=='applied'||label!=='Geri al'&&label!=='Farkı incele'&&item.status!=='pending')continue;
-    acts.append(btn(label,label==='Onayla'?'btn-approve':label==='Geri al'?'btn-danger':'',async()=>{try{await fn()}catch(e){show(e.message)}}));
-  }
+/* Core upgrades are applied automatically ONLY after a passing isolated Docker test (server-side,
+   kill switch AXIS_AUTO_APPLY=0). The UI has no approve button for them: it shows the diff, lets the
+   user reject a pending item whose test failed, and keeps per-item rollback (confirm + rollback phrase). */
+let restartNeeded=false;
+function markRestart(){restartNeeded=true;$('#restartNote').hidden=false}
+async function rollbackUpgrade(item,show){if(!confirm('Bu güncellemeyi geri almak istiyor musun? ('+item.target+')'))return;const r=await v5request('/api/upgrade-rollback',{id:item.id,confirmation:'GERI_AL'});show(r);markRestart();feed('Güncelleme geri alındı: '+item.target+' — yeniden başlatma gerekli','warn',true);v5list()}
+async function rejectUpgrade(item,show){if(!confirm('Testi geçmeyen bu öneri reddedilsin mi? ('+item.target+')'))return;show(await v5request('/api/upgrade-decision',{id:item.id,action:'reject'}));feed('Güncelleme reddedildi: '+item.target,'notrun');v5list()}
+function upgradeRow(item,show,place){
+  const [ds,dl]=dockerState(item.report),failed=item.status==='pending'&&/^(FAIL|BLOCKED)/.test(String(item.report||''));
+  const meta='Docker testi: '+dl+(item.status==='applied'?' · yeniden başlatma gerekli':'')+(item.status==='pending'&&!failed&&dl==='NOT RUN'?' · test sırada':'');
+  const {d,acts}=card('Çekirdek güncelleme · '+item.target,item.description||item.target,meta,item.status);
+  acts.append(btn('Farkı incele','',async()=>{try{show(await getJSON('/api/upgrade-detail?id='+encodeURIComponent(item.id)))}catch(e){show(e.message)}}));
+  if(failed)acts.append(btn('Reddet','',async()=>{try{await rejectUpgrade(item,show)}catch(e){show(e.message)}}));
+  if(item.status==='applied'&&(place==='drawer'||place==='auto'))acts.append(btn('Geri al','btn-danger',async()=>{try{await rollbackUpgrade(item,show)}catch(e){show(e.message)}}));
   return d;
 }
-async function v5propose(){try{const x=await v5request('/api/upgrade-propose',{target:$('#v5target').value,code:$('#v5code').value,description:$('#v5desc').value});v5show(x);feed('Güncelleme önerisi oluşturuldu (onay bekliyor)','warn');v5list()}catch(e){v5show(e.message)}}
+let autoSeen=null;
+async function refreshAuto(){try{const a=await getJSON('/api/upgrade-auto');const on=!!a.enabled,m=$('#autoMode');
+  m.textContent='Otomatik güncelleme: '+(on?'açık':'kapalı');m.dataset.state=on?'ok':'warn';
+  setSt('autoupd',on?'ok':'notrun',on?'Açık':'Kapalı',on?'PASS ise uygulanır':'AXIS_AUTO_APPLY=0');
+  const evs=Array.isArray(a.events)?a.events:[];
+  if(autoSeen){for(const e of evs.slice().reverse())if(!autoSeen.has(e.id)){if(e.outcome==='applied'){feed('Otomatik uygulandı: '+e.target+' — '+(e.description||'')+' · yeniden başlatma gerekli','ok',true);markRestart()}else feed('Otomatik uygulanmadı: '+e.target+' — '+(e.detail||''),'fail',true)}}
+  autoSeen=new Set(evs.map(e=>e.id));
+  const root=$('#apAuto');root.replaceChildren();const done=new Set();
+  for(const e of evs){if(e.outcome!=='applied'||done.has(e.upgrade_id))continue;done.add(e.upgrade_id);
+    root.append(upgradeRow({id:e.upgrade_id,target:e.target,description:e.description,status:e.upgrade_status||'applied',report:'PASS'},updShow,'auto'));if(done.size>=8)break}
+  if(!done.size)root.append(el('p','empty','Henüz otomatik güncelleme yok.'));
+}catch(e){setSt('autoupd','unknown','—',e.message)}}
+async function v5propose(){try{const x=await v5request('/api/upgrade-propose',{target:$('#v5target').value,code:$('#v5code').value,description:$('#v5desc').value});v5show(x);feed('Güncelleme önerisi oluşturuldu: '+(x.auto_apply_queued?'Docker testi sırada; PASS ise otomatik uygulanır':'otomatik uygulama kapalı, beklemede'),'warn',true);v5list()}catch(e){v5show(e.message)}}
 async function v5list(){try{const items=await getJSON('/api/upgrades'),root=$('#v5items'),rail=$('#apUpgrade');root.replaceChildren();rail.replaceChildren();let n=0;
-  for(const item of items){root.append(upgradeRow(item,v5show));if(item.status==='pending'){rail.append(upgradeRow(item,showOut));n++}}
+  for(const item of items){root.append(upgradeRow(item,v5show,'drawer'));if(item.status==='pending'){rail.append(upgradeRow(item,updShow,'rail'));n++}}
   if(!items.length)root.append(el('p','empty','Henüz güncelleme önerisi yok.'));
   const tested=items.find(i=>i.report);if(tested){const [ds,dl]=dockerState(tested.report);setSt('docker',ds,dl,'Son test: '+tested.target)}else setSt('docker','notrun','NOT RUN','Yalnızca güncelleme testi sırasında çalışır');
-  pend.upgrade=n;updatePending()}catch(e){v5show(e.message)}}
+  pend.upgrade=n;updatePending();await refreshAuto()}catch(e){v5show(e.message)}}
 
 /* ---------------- Multi-agent development (V7) ---------------- */
 async function agentRun(){const b=$('#agentStart');b.disabled=true;$('#agentOutput').textContent='Ajanlar sırayla çalışıyor; yerel model hızına göre birkaç dakika sürebilir...';feed('Çok ajanlı geliştirme başlatıldı','info');try{const r=await fetch('/api/agent-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request:$('#agentRequest').value,target:$('#agentTarget').value})});const j=await r.json();$('#agentOutput').textContent=JSON.stringify(j,null,2);feed('Ajan çalışması bitti'+(r.ok?'':' (HTTP '+r.status+')'),r.ok?'ok':'fail',true);if(typeof v5list==='function')v5list()}catch(e){$('#agentOutput').textContent=String(e)}finally{b.disabled=false}}
@@ -771,7 +829,7 @@ async function v9scan(){try{v9show(await v9post('/api/agent-scan',{request:$('#v
 async function v9parallel(){try{v9show(await v9post('/api/agent-parallel',{request:$('#v9task').value}))}catch(e){v9show(e.message)}}
 async function v9health(){try{v9show(await getJSON('/api/agent-health'))}catch(e){v9show(e.message)}}
 async function v9list(){try{const rows=await getJSON('/api/agent-catalog'),root=$('#v9agents'),rail=$('#apAgent');root.replaceChildren();rail.replaceChildren();let n=0;
-  for(const x of rows){root.append(agentRow(x,v9show));if(x.status==='pending'){rail.append(agentRow(x,showOut));n++}}
+  for(const x of rows){root.append(agentRow(x,v9show));if(x.status==='pending'){rail.append(agentRow(x,updShow));n++}}
   pend.agent=n;updatePending()}catch(e){v9show(e.message)}}
 
 /* ---------------- Central brain learning (V10) ---------------- */
@@ -779,14 +837,14 @@ function brainOut(x){$('#brainOutput').textContent=JSON.stringify(x,null,2)}
 function stepsText(s){return Array.isArray(s.steps)?s.steps.join(' → '):String(s.steps||'')}
 function brainRow(skill,show){
   const {d,acts}=card('Öğrenilmiş beceri',skill.name,stepsText(skill),skill.status);
-  if(skill.status==='pending')for(const action of ['approve','reject']){acts.append(btn(action==='approve'?'Onayla':'Reddet',action==='approve'?'btn-approve':'',async()=>{if(action==='approve'&&!confirm('Kanıtları inceledin mi? Beceri kütüphanesine eklenecek.'))return;try{show(await brainReq('/api/brain-decision',{id:skill.id,action,confirmation:action==='approve'?'ONAYLIYORUM':''}));feed('Öğrenilmiş beceri '+(action==='approve'?'onaylandı':'reddedildi')+': '+skill.name,action==='approve'?'ok':'notrun',true);brainPending();if(!$('#adv').open)return;brainLoad()}catch(e){show(e.message)}}))}
+  if(skill.status==='pending')for(const action of ['approve','reject']){acts.append(btn(action==='approve'?'Onayla':'Reddet',action==='approve'?'btn-approve':'',async()=>{if(action==='approve'&&!confirm('Kanıtları inceledin mi? Beceri kütüphanesine eklenecek.'))return;try{show(await brainReq('/api/brain-decision',{id:skill.id,action,confirmation:action==='approve'?'ONAYLIYORUM':''}));feed('Öğrenilmiş beceri '+(action==='approve'?'onaylandı':'reddedildi')+': '+skill.name,action==='approve'?'ok':'notrun',true);brainPending();if(currentTab!=='tools')return;brainLoad()}catch(e){show(e.message)}}))}
   return d;
 }
 async function brainLoad(){try{const [e,s]=await Promise.all([brainReq('/api/brain-experiences'),brainReq('/api/brain-skills')]);brainOut({experiences:e,skills:s});const root=$('#brainSkillList');root.replaceChildren();for(const skill of s)root.append(brainRow(skill,brainOut))}catch(e){brainOut(e.message)}}
-async function brainPending(){try{const s=await brainReq('/api/brain-skills');const rail=$('#apBrain');rail.replaceChildren();let n=0;for(const skill of s)if(skill.status==='pending'){rail.append(brainRow(skill,showOut));n++}pend.brain=n;updatePending()}catch(e){/* shown on next manual load */}}
+async function brainPending(){try{const s=await brainReq('/api/brain-skills');const rail=$('#apBrain');rail.replaceChildren();let n=0;for(const skill of s)if(skill.status==='pending'){rail.append(brainRow(skill,updShow));n++}pend.brain=n;updatePending()}catch(e){/* shown on next manual load */}}
 async function brainSuggest(){try{brainOut(await brainReq('/api/brain-discover'))}catch(e){brainOut(e.message)}}
 async function brainPropose(){try{brainOut(await brainReq('/api/brain-propose',{name:$('#brainName').value,steps:$('#brainSteps').value.split(',').map(x=>x.trim()),evidence_ids:$('#brainEvidence').value.split(',').map(x=>x.trim())}));feed('Kanıtlı beceri önerildi (onay bekliyor)','warn');brainLoad();brainPending()}catch(e){brainOut(e.message)}}
-async function brainVisualize(){try{closeAdv();if(mode!=='skills'){mode='skills'}await setMode('skills');brainOut({nodes:nodes.length,edges:edges.length})}catch(e){brainOut(e.message)}}
+async function brainVisualize(){try{switchTab('memory');await setMode('skills');brainOut({nodes:nodes.length,edges:edges.length})}catch(e){brainOut(e.message)}}
 
 /* ---------------- Learned skill runner (V11) ---------------- */
 async function axisList(){const out=$('#axisOutput'),root=$('#axisSkills');try{const skills=await getJSON('/api/brain-skills');root.replaceChildren();
@@ -820,57 +878,120 @@ async function v13Update(){try{
    Command bar — transparent client-side intent rules
    ===================================================================== */
 function norm(s){return s.toLocaleLowerCase('tr').replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s').replace(/ö/g,'o').replace(/ç/g,'c').replace(/â/g,'a').replace(/î/g,'i').replace(/û/g,'u')}
+/* Requests to DO something (apply, approve, fix, install …). Mirrors vector_intelligence.ACTION_RE; answered locally, never sent. */
+const ACTION_RE=/(^|\s)(uygula|uygulayin|uygular misin|onayla|onaylayin|reddet|geri al|calistir|kur|yukle|sil|duzelt|guncelle|degistir|deploy et|commit et|push et|merge et)\s*[.!]*$/;
+const ACTION_TEXT='AXIS bunu komut satırından yapmaz: buradan hiçbir güncelleme, düzeltme, kurulum, onay veya dosya değişikliği uygulanmaz.\n\n• Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa sunucu tarafından otomatik uygulanır; durumları, farkları ve «Geri al» «Güncellemeler» sekmesinde.\n• Beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler aynı sekmede senin onayını bekler.\n\nBir değişikliğin ne yapacağını soru olarak sorabilirsin.';
+const MAX_Q=2000;
 /* Each rule: test on the normalised text, label, endpoint(s) shown to the user, run(). Read-only unless noted. */
 function parseIntent(raw){
   const text=raw.trim(),n=norm(text);let m;
   if(!text)return null;
   if(/^(yardim|help|\?)$/.test(n))return {name:'Yardım',path:'yerel',run:help};
-  if(/^(durum|saglik|sistem( durumu)?|kontrol|status)\b/.test(n))return {name:'Sistem durumu',path:'GET /api/agent-health · /api/status · /api/capabilities',run:cmdHealth};
-  if(/^(oneriler|oneri|onaylar|onay|bekleyenler|bekleyen)\b/.test(n))return {name:'Önerileri listele',path:'GET /api/proposals · /api/upgrades · /api/agent-catalog · /api/brain-skills',run:cmdApprovals};
-  if(/^(sinir agi|sinir|noral|neural|xor)\b/.test(n)){const a=(m=n.match(/\ba\s*=\s*([01])\b/))?m[1]:null,b=(m=n.match(/\bb\s*=\s*([01])\b/))?m[1]:null;const bare=n.replace(/\b[ab]\s*=\s*[01]\b/g,'').match(/\b([01])\s+([01])\b/);const A=a!==null?a:bare?bare[1]:null,B=b!==null?b:bare?bare[2]:null;
-    return {name:'Sinir ağı'+(A!==null||B!==null?' (a='+(A!==null?A:$('#xorA').value)+', b='+(B!==null?B:$('#xorB').value)+')':''),path:'GET /api/neural',run:()=>cmdNeural(A,B)}}
-  if(/^(bilgi agi|bilgi|graf|harita)\b/.test(n))return {name:'Bilgi ağı',path:'GET /api/graph',run:()=>setMode('knowledge')};
-  if(/^(beceri agi|beceri grafigi|beceriler)\b/.test(n))return {name:'Beceri ağı',path:'GET /api/brain-graph',run:()=>setMode('skills')};
-  if(/^(ogrenme|ogrenme grafigi)\b/.test(n))return {name:'Öğrenme grafiği',path:'GET /api/axis-v13-dashboard',run:()=>setMode('learning')};
-  if(/^(gelismis|araclar|ayarlar)$/.test(n))return {name:'Gelişmiş araçları aç',path:'yerel',run:async()=>openAdv()};
-  if((m=n.match(/^(hafizada ara|hafiza)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Hafızada ara: «'+q+'»',path:'POST /api/parallel (salt-okunur araçlar)',run:()=>cmdMemory(q)}}
-  if((m=n.match(/^(sentezle|sentez|ozetle)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Literatür sentezi: «'+q+'»',path:'POST /api/synthesize (yerel Ollama)',run:()=>cmdSynth(q)}}
-  let topic=text;
+  if(ACTION_RE.test(n))return {name:'Eylem isteği — uygulanmaz',path:'yerel açıklama (sunucuya gönderilmez)',run:()=>localAnswer(text,ACTION_TEXT,'Eylem yapılmadı')};
+  if(/^(durum|saglik|sistem( durumu)?|kontrol|status)$/.test(n))return {name:'Sistem durumu',path:'GET /api/agent-health · /api/status',run:cmdHealth};
+  if(/^(oneriler|oneri|onay|onaylar|bekleyenler|bekleyen|guncellemeler)$/.test(n))return {name:'Güncellemeler ve bekleyen öneriler',path:'GET /api/upgrades · /api/proposals …',run:cmdApprovals};
+  if(/^(sinir agi|sinir|noral|neural|xor)\b/.test(n)&&!/\?$/.test(n)){const a=(m=n.match(/\ba\s*=\s*([01])\b/))?m[1]:null,b=(m=n.match(/\bb\s*=\s*([01])\b/))?m[1]:null;const bare=n.replace(/\b[ab]\s*=\s*[01]\b/g,'').match(/\b([01])\s+([01])\b/);const A=a!==null?a:bare?bare[1]:null,B=b!==null?b:bare?bare[2]:null;
+    if(/^(sinir agi|sinir|noral|neural|xor)(\s+[ab]?\s*=?\s*[01])*\s*$/.test(n))return {name:'Sinir ağı'+(A!==null||B!==null?' (a='+(A!==null?A:$('#xorA').value)+', b='+(B!==null?B:$('#xorB').value)+')':''),path:'GET /api/neural',run:()=>cmdNeural(A,B)}}
+  if(/^(bilgi agi|graf|harita)$/.test(n))return {name:'Bilgi ağı',path:'GET /api/graph',run:()=>{switchTab('memory');return setMode('knowledge')}};
+  if(/^(beceri agi|beceri grafigi|beceriler)$/.test(n))return {name:'Beceri ağı',path:'GET /api/brain-graph',run:()=>{switchTab('memory');return setMode('skills')}};
+  if(/^(ogrenme|ogrenme grafigi)$/.test(n))return {name:'Öğrenme grafiği',path:'GET /api/axis-v13-dashboard',run:()=>{switchTab('memory');return setMode('learning')}};
+  if(/^(gelismis|araclar|ayarlar)$/.test(n))return {name:'Araçlar',path:'yerel',run:async()=>switchTab('tools')};
+  if((m=n.match(/^(hafizada ara|hafiza)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Hafızada ara: «'+q+'»',path:'POST /api/parallel (salt-okunur)',run:()=>cmdMemory(q)}}
+  if((m=n.match(/^(sentezle|sentez|ozetle)\s+/))){const q=text.slice(m[0].length).trim();return {name:'Literatür sentezi: «'+q+'»',path:'POST /api/synthesize (yerel model)',run:()=>cmdSynth(q)}}
+  /* Literature search ONLY on an explicit request. */
+  if(/^(arastir|ogren|incele)$/.test(n))return {name:'Araştırma konusu eksik',path:'yerel',run:()=>localAnswer(text,'Neyi araştırayım? Örn. «araştır yapay sinir ağları» ya da «yapay sinir ağları hakkında makale».','Konu eksik')};
+  let topic=null;
   if((m=n.match(/^(arastir|ogren|incele)\s+/)))topic=text.slice(m[0].length).trim();
-  else if((m=n.match(/\s+(hakkinda arastir|hakkinda|konusunu arastir|arastir)$/)))topic=text.slice(0,text.length-m[0].length).trim();
-  const explicit=topic!==text;
-  return {name:'Araştırma: «'+topic+'»'+(explicit?'':' (varsayılan)'),path:'POST /api/research (OpenAlex)',run:()=>cmdResearch(topic)};
+  else if((m=n.match(/\s+(hakkinda arastir|konusunu arastir|arastir|hakkinda makale(ler)?( bul| ara)?|hakkinda literatur|makale(leri)? (bul|ara))\s*[.!]*$/)))topic=text.slice(0,text.length-m[0].length).trim();
+  if(topic!==null)return {name:'Literatür araştırması: «'+topic+'»',path:'POST /api/research (OpenAlex)',run:()=>cmdResearch(topic)};
+  return {name:'Soru — yerel model yanıtlar',path:'POST /api/ask ('+(text.length>MAX_Q?'ÇOK UZUN':'yerel Ollama')+')',run:()=>cmdAsk(text)};
 }
 function showIntent(it){$('#intentName').textContent=it?it.name:'—';$('#intentPath').textContent=it?'→ '+it.path:''}
 $('#cmdInput').addEventListener('input',e=>showIntent(parseIntent(e.target.value)));
 $('#cmd').addEventListener('submit',async e=>{
   e.preventDefault();const input=$('#cmdInput'),it=parseIntent(input.value);if(!it)return;
-  showIntent(it);feed('Seçilen eylem: '+it.name+' → '+it.path,'info',true);
+  showIntent(it);feed('Seçilen eylem: '+it.name+' → '+it.path,'info');
   const go=$('#cmdGo');go.disabled=true;
-  try{await it.run();input.value=''}catch(err){feed(it.name+': '+err.message,'fail',true)}finally{go.disabled=false}
+  try{await it.run();input.value=''}catch(err){feed(it.name+': '+err.message,'fail',true);localAnswer(input.value.trim(),err.message,'FAILED','failed')}finally{go.disabled=false}
 });
 for(const b of document.querySelectorAll('[data-cmd]'))b.addEventListener('click',()=>{const i=$('#cmdInput');i.value=b.dataset.cmd;showIntent(parseIntent(i.value));if(b.dataset.fill){i.focus();return}$('#cmd').requestSubmit?$('#cmd').requestSubmit():$('#cmdGo').click()});
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!$('#adv').open&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();$('#cmdInput').focus()}});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();switchTab('chat');$('#cmdInput').focus()}});
 
-async function cmdHealth(){const [h]=await Promise.all([getJSON('/api/agent-health'),refreshHealth(),reload()]);showOut(h);feed('Durum: Ollama '+(h.ollama_reachable?'erişilebilir':'erişilemiyor')+' · PyTorch '+(h.torch_installed?'kurulu':'yok')+' · Docker: '+$('#st-docker .st-val').textContent,h.ollama_reachable?'ok':'warn',true)}
-async function cmdApprovals(){await refreshApprovals();const n=pend.skill+pend.upgrade+pend.agent+pend.brain;feed(n?n+' öneri onayını bekliyor':'Onay bekleyen öneri yok',n?'warn':'ok',true);const a=$('#approvals');a.scrollIntoView({block:'start',behavior:RM.matches?'auto':'smooth'});a.focus({preventScroll:true})}
-async function cmdNeural(A,B){if(A!==null)$('#xorA').value=A;if(B!==null)$('#xorB').value=B;const d=mode==='neural'?await showNeural():(await setMode('neural'),null);if(mode==='neural'&&nodes.length)feed('Sinir ağı çıktısı: '+$('#counts').textContent,'ok',true)}
-async function cmdMemory(q){if(!q)throw Error('Aranacak kavramı yaz');const r=await postJSON('/api/parallel',{tasks:[{tool:'count_nodes'},{tool:'list_recent_research'},{tool:'search_memory',args:{query:q}}]});showOut(r);feed('Hafıza araması tamamlandı: '+q,'ok',true)}
-async function cmdSynth(q){if(!q)throw Error('Konu yaz');feed('Sentez hazırlanıyor (yerel model)…','info');const r=await postJSON('/api/synthesize',{topic:q});showOut(r);feed('Sentez hazır: '+q,'ok',true)}
+/* ---------------- Questions & answers (POST /api/ask, polled every 2 s while visible) ---------------- */
+const asks=[];/* newest first: {q,id,status:'running'|'completed'|'failed'|'local',started,result,error,label,lastPoll} */
+/* Model output is shown as plain text; only Markdown emphasis markers are dropped for readability. */
+function plain(s){return String(s||'').replace(/\*\*([^*\n]+)\*\*/g,'$1').replace(/^#{1,6}\s+/gm,'')}
+function secs(e){return Math.max(0,Math.round(((e.finished||Date.now())-e.started)/1000))}
+function renderAsks(){
+  const e=asks[0],box=$('#answer');if(!e){box.hidden=true;return}
+  box.hidden=false;box.dataset.state=e.status;$('#answerQ').textContent=e.q;
+  const st=$('#answerState'),wait=$('#answerWait'),spin=st.querySelector('.spinner'),txt=$('#answerText'),meta=$('#answerMeta');
+  meta.replaceChildren();txt.textContent='';
+  if(e.status==='running'){st.hidden=false;spin.hidden=false;wait.textContent=(e.id?'Yerel model düşünüyor… ':'Gönderiliyor… ')+secs(e)+' sn'}
+  else if(e.status==='failed'){st.hidden=false;spin.hidden=true;wait.textContent='✕ FAILED · '+(e.error||'bilinmeyen hata')}
+  else{st.hidden=true;txt.textContent=e.status==='local'?e.text:plain(e.result.answer);
+    if(e.status==='local'){meta.append(el('span','pill',e.label||'Yerel yanıt'),el('span','','sunucuya gönderilmedi'))}
+    else{const r=e.result;if(r.action_refused)meta.append(el('span','pill','Eylem yapılmadı'));else if(r.model)meta.append(el('span','pill',r.model));
+      if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Düğümü seç: '+m.id;meta.append(b)}}
+      else if(r.general_knowledge){const g=el('span','pill','genel bilgi');g.dataset.state='warn';g.title='Bellekte ilgili kayıt bulunamadı; yanıt modelin genel bilgisinden.';meta.append(g)}
+      meta.append(el('span','',(typeof r.elapsed_s==='number'?r.elapsed_s.toFixed(1):secs(e))+' sn'))}}
+  const hist=$('#askHistory');hist.replaceChildren();
+  for(const h of asks.slice(1)){const li=el('li');li.dataset.state=h.status;const a=h.status==='running'?'… bekleniyor ('+secs(h)+' sn)':h.status==='failed'?'FAILED · '+(h.error||''):String(h.status==='local'?h.text:plain(h.result.answer));li.append(el('div','h-q',h.q),el('div','h-a',a.length>280?a.slice(0,280)+'…':a));hist.append(li)}
+  $('#historyWrap').hidden=asks.length<2;
+}
+function pushAsk(entry){asks.unshift(entry);while(asks.length>6)asks.pop();switchTab('chat');renderAsks()}
+function localAnswer(q,text,label,status){pushAsk({q,status:status||'local',text,error:status==='failed'?text:null,label,started:Date.now(),finished:Date.now()})}
+async function cmdAsk(q){
+  if(q.length>MAX_Q)throw Error('Soru en fazla '+MAX_Q+' karakter olabilir');
+  const entry={q,status:'running',started:Date.now(),lastPoll:0};pushAsk(entry);
+  try{const r=await postJSON('/api/ask',{question:q});entry.id=r.job_id;entry.lastPoll=Date.now();feed('Soru yerel modele gönderildi','info')}
+  catch(e){entry.status='failed';entry.error=e.message;entry.finished=Date.now();renderAsks()}
+}
+async function pollAsk(entry){
+  entry.lastPoll=Date.now();
+  try{const r=await fetch('/api/ask-result?id='+encodeURIComponent(entry.id));const j=await readJSON(r);
+    if(!r.ok){entry.status='failed';entry.error=(j&&j.error)||('HTTP '+r.status)}
+    else if(j.status==='completed'){entry.status='completed';entry.result=j;feed('Yanıt hazır ('+(j.elapsed_s||'?')+' sn)'+(j.general_knowledge?' · genel bilgi':''),'ok')}
+    else if(j.status==='failed'){entry.status='failed';entry.error=j.error;feed('Soru FAILED: '+j.error,'fail')}
+    if(entry.status!=='running')entry.finished=Date.now();
+  }catch(e){/* transient; retried on the next tick */}
+}
+setInterval(()=>{const running=asks.filter(a=>a.status==='running');if(!running.length)return;
+  if(!document.hidden)for(const a of running)if(a.id&&Date.now()-a.lastPoll>=2000)pollAsk(a).then(renderAsks);
+  renderAsks()},1000);
+
+async function cmdHealth(){const [h]=await Promise.all([getJSON('/api/agent-health'),refreshHealth(),reload()]);showOut(h);const t='Ollama '+(h.ollama_reachable?'erişilebilir':'erişilemiyor')+' · PyTorch '+(h.torch_installed?'kurulu':'yok')+' · Docker: '+$('#st-docker .st-val').textContent;feed('Durum: '+t,h.ollama_reachable?'ok':'warn');localAnswer('durum',t+'\nAyrıntılar «Sistem» sekmesinde.','Durum')}
+async function cmdApprovals(){await refreshApprovals();const n=pend.skill+pend.upgrade+pend.agent+pend.brain;feed(n?n+' öneri bekliyor':'Bekleyen öneri yok',n?'warn':'ok',true);switchTab('updates');$('#approvals').focus({preventScroll:true})}
+async function cmdNeural(A,B){switchTab('neural');if(A!==null)$('#xorA').value=A;if(B!==null)$('#xorB').value=B;if(mode==='neural')await showNeural();else await setMode('neural');if(mode==='neural'&&nodes.length)feed('Sinir ağı çıktısı: '+$('#counts').textContent,'ok')}
+async function cmdMemory(q){if(!q)throw Error('Aranacak kavramı yaz');const r=await postJSON('/api/parallel',{tasks:[{tool:'count_nodes'},{tool:'list_recent_research'},{tool:'search_memory',args:{query:q}}]});showOut(r);
+  const hits=(r.find(x=>x.tool==='search_memory')||{}).result||[],cnt=(r.find(x=>x.tool==='count_nodes')||{}).result||{};
+  localAnswer('hafızada ara '+q,(hits.length?hits.length+' eşleşme:\n'+hits.slice(0,10).map(h=>'• '+h.label+' ('+h.kind+')').join('\n'):'Etiketinde «'+q+'» geçen düğüm yok.')+'\n\nBellekte '+(cnt.nodes||0)+' düğüm, '+(cnt.edges||0)+' ilişki var.','Hafıza araması')}
+async function cmdSynth(q){if(!q)throw Error('Konu yaz');const entry={q:'sentezle '+q,status:'running',started:Date.now(),lastPoll:Infinity};pushAsk(entry);
+  try{const r=await postJSON('/api/synthesize',{topic:q});showOut(r);entry.status='completed';entry.result={answer:r.answer+'\n\n('+r.note+')',model:'literatür sentezi',used_memory:[],general_knowledge:false};feed('Sentez hazır: '+q,'ok')}
+  catch(e){entry.status='failed';entry.error=e.message}entry.finished=Date.now();renderAsks()}
 async function cmdResearch(topic){
   if(topic.length<3)throw Error('Konu en az 3 karakter olmalı');
   const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
-  feed('Araştırma çalışıyor: '+topic+'. Sonuçlar otomatik görünecek.','info',true);if(mode!=='knowledge')await setMode('knowledge');reload();
+  feed('Araştırma çalışıyor: '+topic,'info');localAnswer('araştır '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'». Kayıtlar «Bellek» sekmesinde görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
 }
-function help(){showOut(['Komutlar (yazdığın metin aşağıdaki sırayla eşleştirilir):','  durum / sistem / kontrol      → sistem durumu (salt-okunur)','  öneriler / onaylar            → onay bekleyen öneriler (salt-okunur)','  sinir ağı a=1 b=0 / xor 1 1   → eğitilmiş XOR sinir ağı','  bilgi ağı · beceri ağı · öğrenme → çekirdek görünümünü değiştir','  hafızada ara <kavram>         → salt-okunur hafıza araçları','  sentezle <konu>               → yerel model ile literatür sentezi','  araştır <konu> / <konu> hakkında → OpenAlex araştırması','  gelişmiş                      → Gelişmiş araçlar','  başka her şey                 → araştırma konusu olarak çalışır','','Onay, güncelleme, geri alma, yükleme, ajan ve Docker işlemleri komut satırından yapılmaz.'].join('\n'));feed('Yardım gösterildi','info')}
+function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · <konu> hakkında makale → OpenAlex literatür araması','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 
-/* ---------------- Drawer, theme, wiring ---------------- */
-const adv=$('#adv');
-function openAdv(){if(adv.showModal){if(!adv.open)adv.showModal()}else adv.setAttribute('open','')}
-function closeAdv(){if(adv.open){if(adv.close)adv.close();else adv.removeAttribute('open')}}
-$('#advBtn').addEventListener('click',openAdv);$('#advClose').addEventListener('click',closeAdv);
-adv.addEventListener('click',e=>{if(e.target===adv)closeAdv()});
-adv.addEventListener('close',()=>$('#advBtn').focus());
+/* ---------------- Tabs, theme, wiring ---------------- */
+const TABS=['chat','neural','memory','updates','system','tools'];let currentTab='chat';
+function switchTab(t,focus){
+  if(!TABS.includes(t))t='chat';const prev=currentTab;currentTab=t;
+  for(const b of document.querySelectorAll('[role=tab]')){const on=b.dataset.tab===t;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;if(on){if(focus)b.focus();b.scrollIntoView({block:'nearest',inline:'center'})}}
+  for(const k of TABS)$('#panel-'+k).hidden=k!==t;
+  if(t==='neural'){$('#slot-neural').append($('#stage'));$('#memSeg').hidden=true;if(mode!=='neural')setMode('neural').catch(()=>{})}
+  if(t==='memory'){$('#slot-memory').append($('#stage'));$('#memSeg').hidden=false;if(mode==='neural')setMode('knowledge').catch(()=>{})}
+  if(t==='tools'&&prev!=='tools')brainLoad();
+  try{localStorage.setItem('axis-tab',t)}catch(e){}
+  requestAnimationFrame(()=>{if(t==='neural'||t==='memory')resize()});
+}
+for(const b of document.querySelectorAll('[role=tab]'))b.addEventListener('click',()=>switchTab(b.dataset.tab));
+$('#tabs').addEventListener('keydown',e=>{const i=TABS.indexOf(currentTab);let j=null;
+  if(e.key==='ArrowRight')j=(i+1)%TABS.length;else if(e.key==='ArrowLeft')j=(i-1+TABS.length)%TABS.length;else if(e.key==='Home')j=0;else if(e.key==='End')j=TABS.length-1;
+  if(j!==null){e.preventDefault();switchTab(TABS[j],true)}});
 const ACTS={v4synth,v4upload,v4generate,v4parallel,proposeSkill,refreshProposals,v5propose,v5list,agentRun,agentList,v9scan,v9parallel,v9health,v9list,brainLoad,brainSuggest,brainVisualize,brainPropose,axisList};
 for(const b of document.querySelectorAll('[data-act]'))b.addEventListener('click',()=>{Promise.resolve(ACTS[b.dataset.act]()).catch(()=>{})});
 for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>setMode(b.dataset.mode).catch(()=>{}));
@@ -878,7 +999,7 @@ $('#home').addEventListener('click',()=>{yaw=.25;pitch=.15;zoom=1;draw()});
 $('#rotate').addEventListener('click',()=>{setRotate(!auto);draw()});
 const THEMES=['auto','dark','light'],TL={auto:'Otomatik',dark:'Koyu',light:'Açık'};let theme='auto';
 try{const t=localStorage.getItem('axis-theme');if(THEMES.includes(t))theme=t}catch(e){}
-function applyTheme(){if(theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',theme);$('#themeBtn').textContent='Tema: '+TL[theme]}
+function applyTheme(){if(theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',theme);$('#themeBtn').textContent='◐ '+TL[theme];$('#themeBtn').title='Tema: '+TL[theme]}
 $('#themeBtn').addEventListener('click',()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%3];try{localStorage.setItem('axis-theme',theme)}catch(e){}applyTheme()});
 applyTheme();
 
@@ -891,7 +1012,8 @@ document.addEventListener('visibilitychange',()=>{$('#pollState').textContent=do
 
 /* initial automatic load: status, graph, recent research, health, pending proposals, learning graph */
 setRotate(auto);resize();tick(true);setMode('neural').catch(()=>{});loadGraph();axisList();
-feed('AXIS konsolu açıldı · veriler otomatik yükleniyor','info');
+{let saved='chat';try{const s=localStorage.getItem('axis-tab');if(TABS.includes(s))saved=s}catch(e){}switchTab(saved)}
+feed('AXIS konsolu açıldı','info');
 </script>
 <script>
 /* Visual-only: flag console outputs that contain failure / not-run results so they stand out. Reads textContent only. */

@@ -23,3 +23,15 @@ This extends V4 with (1) an interactive visualization of a small neural network'
 - The previous V4 features may require network access, PyMuPDF, and a running Ollama model.
 
 Run tests: `py -m unittest test_server.py test_v5.py -v`.
+
+## Otomatik çekirdek güncelleme (2026-11-10)
+
+Kullanıcının açık kararıyla (2026-11-10) çekirdek güncellemeler artık **otomatik uygulanır** — ama yalnızca izole Docker testi PASS olduğunda. Yukarıdaki "approve explicitly" adımı ve "Only … are updateable" listesi bu bölümle değişmiştir.
+
+- **Akış:** `propose()` → arka planda `verify()` (Docker, ağsız, salt-okunur, değişmedi) → yalnızca PASS ise mevcut `decide(id, 'approve', 'ONAYLIYORUM')` yolu çağrılır. Bu yol taze bir Docker testi daha çalıştırır, özeti (digest) yeniden doğrular, dosyayı atomik olarak yazar ve yedek alır. FAIL veya BLOCKED (Docker yok) ise hiçbir şey uygulanmaz; öneri raporuyla birlikte bekler ve arayüzden reddedilebilir.
+- **Kapsam:** AXIS klasörünün üst düzeyindeki her `*.py` modülü, şunlar **hariç** (korunan liste): `vector_upgrade.py`, `local_models.py`, `server.py`, `axis_sqlite.py`, tüm `test_*.py` dosyaları, `.py` olmayan her dosya (`index.html` onay arayüzünü taşır) ve klasör dışındaki her yol (yol geçişi ve sembolik bağlantılar reddedilir).
+- **Korunan listenin nedeni:** hatalı bir otomatik güncelleme test/geri alma hattını, yalnızca-yerel model korumasını, HTTP köken (Origin) denetimlerini ve onay uç noktalarını asla devre dışı bırakamasın; bir güncelleme kendi testlerini de düzenleyemesin.
+- **Kapatma anahtarı:** sunucuyu `AXIS_AUTO_APPLY=0` (ya da `false` / `off`) ile başlat. Varsayılan: açık. Kapalıyken öneriler bekler; tek tek uygulama API üzerinden (`POST /api/upgrade-decision`, `ONAYLIYORUM`) çalışmaya devam eder.
+- **Denetim kaydı:** her otomatik uygulama ve test başarısızlığı `central_brain` deneyimlerine (`agent='auto_upgrade'`) ve `upgrades.sqlite3` içindeki `auto_events` tablosuna yazılır; arayüzde "Otomatik uygulandı: <hedef> — <açıklama>" olarak görünür.
+- **Geri alma:** her otomatik uygulanan öğede "Geri al" (onay penceresi + `GERI_AL`) kalır. Uygulama ve geri alma, sunucu yeniden başlatılınca etkin olur ("yeniden başlatma gerekli").
+- **Değişmeyenler:** beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler hâlâ elle onay ister. Docker testi yalnızca sözdizimi, AST sözleşmesi ve verilen davranış testlerini çalıştırır; PASS işlevsel doğruluğun kanıtı değildir.
