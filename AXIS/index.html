@@ -477,11 +477,11 @@ $('#xorBtn').addEventListener('click',()=>{openNeural();graphFocus('neural')});
 $('#agRefresh').addEventListener('click',()=>loadNetwork());
 
 /* ---------------- Automatic read-only refresh ---------------- */
-let lastNodeCount=null,jobSeen=null;
+let lastNodeCount=null,jobSeen=null;const myJobs=new Set();
 function renderJobs(jobs){
   const root=$('#jobs');root.replaceChildren();const next=new Map();let running=0,failed=0;
   for(const j of jobs){const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${j.details}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
-    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+j.details,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok')}else if(j.status==='failed')feed('Araştırma FAILED: '+j.topic+' — '+j.details,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
+    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+j.details,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok');if(myJobs.delete(j.id))localAnswer('araştır '+j.topic,'Araştırma tamamlandı: «'+j.topic+'» — '+j.details+'. Şimdi «'+j.topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma')}else if(j.status==='failed'){feed('Araştırma FAILED: '+j.topic+' — '+j.details,'fail',true);toast('Araştırma başarısız: '+j.topic,'fail');if(myJobs.delete(j.id))localAnswer('araştır '+j.topic,'Araştırma başarısız: «'+j.topic+'» — '+j.details,'Araştırma','failed')}else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
   if(!jobs.length)root.append(el('p','empty','Henüz araştırma yok.'));
   jobSeen=next;
   setSt('jobs',failed?'fail':running?'warn':jobs.length?'ok':'notrun',running?running+' çalışıyor':jobs.length?'Boşta':'NOT RUN',failed?failed+' FAILED (son 15)':jobs.length?jobs.length+' kayıt':'Henüz iş yok');
@@ -658,7 +658,7 @@ function parseIntent(raw){
   const rs=parseResearch(text,n);
   if(rs){
     if(rs.error)return {name:'Araştırma — geçersiz kayıt sayısı',path:'yerel',run:()=>localAnswer(text,rs.error,'Geçersiz sayı')};
-    return {name:'araştır · '+rs.limit+' kayıt',path:'«'+rs.topic+'» · POST /api/research (OpenAlex)',run:()=>cmdResearch(rs.topic,rs.limit)};
+    return {name:'araştır · '+rs.limit+' kayıt',path:'«'+rs.topic+'» · POST /api/research (OpenAlex/arXiv)',run:()=>cmdResearch(rs.topic,rs.limit)};
   }
   return {name:'Soru — yerel model yanıtlar',path:'POST /api/ask ('+(text.length>MAX_Q?'ÇOK UZUN':'yerel Ollama')+')',run:()=>cmdAsk(text)};
 }
@@ -731,8 +731,8 @@ async function cmdSynth(q){if(!q)throw Error('Konu yaz');const entry={q:'sentezl
 async function cmdResearch(topic,limit){
   if(topic.length<3)throw Error('Konu en az 3 karakter olmalı');
   limit=limit||RESEARCH_DEFAULT;
-  const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
-  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
+  const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');if(j.job_id)myJobs.add(j.job_id);
+  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'Literatür araştırması başladı (OpenAlex; kota dolarsa arXiv): «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
 }
 function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · beceri ağı · öğrenme · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 

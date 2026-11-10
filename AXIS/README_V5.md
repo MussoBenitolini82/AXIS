@@ -35,3 +35,9 @@ Kullanıcının açık kararıyla (2026-11-10) çekirdek güncellemeler artık *
 - **Denetim kaydı:** her otomatik uygulama ve test başarısızlığı `central_brain` deneyimlerine (`agent='auto_upgrade'`) ve `upgrades.sqlite3` içindeki `auto_events` tablosuna yazılır; arayüzde "Otomatik uygulandı: <hedef> — <açıklama>" olarak görünür.
 - **Geri alma:** her otomatik uygulanan öğede "Geri al" (onay penceresi + `GERI_AL`) kalır. Uygulama ve geri alma, sunucu yeniden başlatılınca etkin olur ("yeniden başlatma gerekli").
 - **Değişmeyenler:** beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler hâlâ elle onay ister. Docker testi yalnızca sözdizimi, AST sözleşmesi ve verilen davranış testlerini çalıştırır; PASS işlevsel doğruluğun kanıtı değildir.
+## Literatür kaynakları
+
+- Araştırma önce OpenAlex'i kullanır. OpenAlex anahtarsız kullanımda küçük bir günlük kota uygular; kota dolunca (HTTP 429) iş otomatik olarak arXiv API'sine (ücretsiz, anahtarsız) geçer. İş ayrıntısında hangi kaynağın kullanıldığı yazar (`OpenAlex: …` / `arXiv: … · OpenAlex günlük ücretsiz kotası doldu → arXiv kullanıldı`).
+- İsteğe bağlı: ücretsiz bir OpenAlex anahtarı `OPENALEX_API_KEY` ortam değişkeniyle verilirse istekte kullanılır. Anahtar depoya yazılmaz.
+- arXiv kayıtlarında kavram etiketleri arXiv kategorileridir (ör. `cs.LG`); doğrulanmış çıkarım değildir.
+- Araştırma tamamlanınca ya da başarısız olunca sonuç sohbete de yazılır.

@@ -10,7 +10,7 @@ import vector_upgrade as upgrades
 import neural_view
 import vector_agents
 """VECTOR Brain V2: local-first research and source-linked knowledge graph."""
-import json, os, re, sqlite3, threading, urllib.parse, urllib.request, uuid
+import json, os, re, sqlite3, threading, urllib.error, urllib.parse, urllib.request, uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -48,6 +48,11 @@ def fetch_json(url,timeout=18):
     with urllib.request.urlopen(req,timeout=timeout) as resp:
         return json.load(resp)
 
+def fetch_text(url,timeout=60,limit=8_000_000):
+    req=urllib.request.Request(url,headers={'User-Agent':'VECTORBrain/0.2 (research prototype; local application)','Accept':'application/atom+xml'})
+    with urllib.request.urlopen(req,timeout=timeout) as resp:
+        return resp.read(limit)
+
 def clean_abstract(inv):
     if not inv: return ''
     words=[]
@@ -65,7 +70,9 @@ def parse_limit(value):
     return value
 
 def search_openalex(topic,limit=RESEARCH_DEFAULT_LIMIT):
-    params=urllib.parse.urlencode({'search':topic,'per-page':limit,'select':'id,title,publication_year,doi,primary_location,abstract_inverted_index,concepts'})
+    q={'search':topic,'per-page':limit,'select':'id,title,publication_year,doi,primary_location,abstract_inverted_index,concepts'}
+    if os.getenv('OPENALEX_API_KEY'): q['api_key']=os.getenv('OPENALEX_API_KEY')  # optional free key; without it OpenAlex has a small daily quota
+    params=urllib.parse.urlencode(q)
     data=fetch_json('https://api.openalex.org/works?'+params,timeout=60)  # up to 200 abstracts: larger body than the 18 s default allows
     out=[]
     for w in data.get('results',[]):
@@ -74,9 +81,48 @@ def search_openalex(topic,limit=RESEARCH_DEFAULT_LIMIT):
         out.append({'id':w.get('id') or str(uuid.uuid4()),'title':w.get('title') or 'Başlıksız','year':w.get('publication_year'),'doi':w.get('doi'),'url':url,'abstract':clean_abstract(w.get('abstract_inverted_index')),'concepts':[x['display_name'] for x in w.get('concepts',[]) if x.get('score',0)>=.5][:8]})
     return out
 
+ATOM='{http://www.w3.org/2005/Atom}'
+
+def search_arxiv(topic,limit=RESEARCH_DEFAULT_LIMIT):
+    """Fallback source: arXiv API (free, no key). Returns the same record shape as search_openalex."""
+    import xml.etree.ElementTree as ET
+    words=[w for w in re.findall(r'[\w\-]+',topic) if len(w)>1][:8]
+    if not words: return []
+    query=' AND '.join('all:'+w for w in words)
+    params=urllib.parse.urlencode({'search_query':query,'start':0,'max_results':limit,'sortBy':'relevance'})
+    root=ET.fromstring(fetch_text('https://export.arxiv.org/api/query?'+params))
+    out=[]
+    for e in root.findall(ATOM+'entry'):
+        rid=(e.findtext(ATOM+'id') or '').strip()
+        if not rid: continue
+        title=' '.join((e.findtext(ATOM+'title') or 'Başlıksız').split())
+        year=(e.findtext(ATOM+'published') or '')[:4]
+        out.append({'id':rid,'title':title,'year':int(year) if year.isdigit() else None,'doi':None,'url':rid.replace('http://','https://',1),
+                    'abstract':' '.join((e.findtext(ATOM+'summary') or '').split())[:5500],
+                    'concepts':[c.get('term') for c in e.findall(ATOM+'category') if c.get('term')][:8]})
+    return out
+
+def friendly_error(e):
+    if isinstance(e,urllib.error.HTTPError) and e.code==429:
+        wait=e.headers.get('Retry-After') if e.headers else None
+        hours=f' (yaklaşık {round(int(wait)/3600,1)} saat sonra sıfırlanır)' if wait and wait.isdigit() else ''
+        return 'OpenAlex günlük ücretsiz kotası doldu'+hours
+    return f'{type(e).__name__}: {e}'
+
+def find_works(topic,limit):
+    """OpenAlex first; on any failure fall back to arXiv. Returns (works, source_name, note)."""
+    try:
+        return search_openalex(topic,limit),'OpenAlex',''
+    except Exception as e:
+        first=friendly_error(e)
+    try:
+        return search_arxiv(topic,limit),'arXiv',first+' → arXiv kullanıldı'
+    except Exception as e:
+        raise RuntimeError(first+'; arXiv de başarısız: '+friendly_error(e)) from None
+
 def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
     try:
-        works=search_openalex(topic,limit)
+        works,source,note=find_works(topic,limit)
         with LOCK,connect() as db:
             root=add_node(db,topic,'topic','Araştırma konusu; kaynaklardan otomatik oluşturuldu')
             for w in works:
@@ -86,11 +132,11 @@ def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
                 link(db,root,paper,'literatür')
                 db.execute('INSERT OR REPLACE INTO evidence VALUES (?,?,?)',(paper,sid,w['abstract'][:350]))
                 for concept in w['concepts']:
-                    c=add_node(db,concept,'concept','OpenAlex tarafından etiketlenen kavram; doğrulanmış çıkarım değildir')
+                    c=add_node(db,concept,'concept',source+' tarafından etiketlenen kavram; doğrulanmış çıkarım değildir')
                     link(db,paper,c,'etiket')
-            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{limit} kayıt istendi · {len(works)} akademik kayıt işlendi',job_id))
+            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{source}: {limit} kayıt istendi · {len(works)} akademik kayıt işlendi'+(f' · {note}' if note else ''),job_id))
             db.commit()
-        brain.log('research','openalex_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt',job_id,{'source_ids':[w['id'] for w in works]})
+        brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception as e:
         brain.log('research','openalex_search','research','failure',str(e)[:1000],job_id)
         with LOCK,connect() as db:
@@ -102,7 +148,7 @@ def start_research(topic,limit=RESEARCH_DEFAULT_LIMIT):
     limit=parse_limit(limit)
     jid=str(uuid.uuid4())
     with LOCK,connect() as db:
-        db.execute('INSERT INTO jobs VALUES (?,?,?,?,?)',(jid,topic,'running',f'OpenAlex aranıyor · {limit} kayıt istendi',now()));db.commit()
+        db.execute('INSERT INTO jobs VALUES (?,?,?,?,?)',(jid,topic,'running',f'Literatür aranıyor (OpenAlex, gerekirse arXiv) · {limit} kayıt istendi',now()));db.commit()
     POOL.submit(research,topic,jid,limit)
     return {'job_id':jid,'status':'running'}
 
