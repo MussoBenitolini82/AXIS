@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -7,8 +7,9 @@
 <title>AXIS</title>
 <script>
 /* Theme before first paint. Preference: auto | dark | light; data-theme always holds the resolved theme. Storage may be unavailable. */
-(function(){var p='auto';try{p=localStorage.getItem('theme')||localStorage.getItem('axis-theme')||'auto'}catch(e){}
-if(p!=='dark'&&p!=='light')p=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+(function(){var p='dark';try{p=localStorage.getItem('theme')||localStorage.getItem('axis-theme')||'dark'}catch(e){}
+if(p==='auto')p=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+if(p!=='dark'&&p!=='light')p='dark';
 document.documentElement.setAttribute('data-theme',p)})();
 </script>
 <link rel="stylesheet" href="/static/app.css">
@@ -47,10 +48,10 @@ document.documentElement.setAttribute('data-theme',p)})();
 
   <div class="main">
     <header class="topbar">
-      <h1 id="viewTitle">Sohbet</h1>
+      <div class="topbar-title"><span class="view-eyebrow">AXIS / ÇALIŞMA ALANI</span><h1 id="viewTitle">Sohbet</h1></div>
       <div class="top-right">
         <div class="conn" id="conn" data-state="unknown" role="status" title="Sunucu bağlantısı"><span class="dot" aria-hidden="true"></span><span id="connText">Bağlanıyor…</span></div>
-        <button type="button" class="ghost icon" id="themeBtn" aria-label="Tema: Otomatik" title="Tema: Otomatik"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
+        <button type="button" class="ghost icon" id="themeBtn" aria-label="Tema: Koyu" title="Tema: Koyu"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
         <details class="help"><summary aria-label="Klavye kısayolları" title="Kısayollar">?</summary>
           <div class="help-pop"><dl>
             <dt>Ctrl+1…5</dt><dd>Bölüm değiştir (Alt+1…5 da olur)</dd>
@@ -68,9 +69,15 @@ document.documentElement.setAttribute('data-theme',p)})();
       <section class="panel chat" id="panel-chat" aria-labelledby="viewTitle">
         <div class="chat-log" id="chatLog">
           <div class="chat-empty" id="chatEmpty">
-            <svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>
-            <h2>Ne sormak istersin?</h2>
-            <p class="note">Yerel model belleği kullanarak yanıtlar.</p>
+            <div class="welcome-mark"><svg class="ic" aria-hidden="true"><use href="#i-neural"/></svg></div>
+            <p class="welcome-kicker">DÜŞÜNCEDEN KEŞFE</p>
+            <h2>Bir fikirle başlayalım.</h2>
+            <p class="note">Sorularını birlikte açalım, bilgileri birbirine bağlayalım.<br>Yanıtlar, bilgisayarındaki model ve AXIS belleğiyle hazırlanır.</p>
+            <div class="welcome-grid" aria-label="Başlangıç önerileri">
+              <button type="button" class="welcome-card" data-cmd="Bellekte neler var?" data-fill="1"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><span class="welcome-card-title">Bir soru sor</span><span class="welcome-card-copy">Belleğindeki bilgileri keşfet</span></button>
+              <button type="button" class="welcome-card" data-cmd="araştır " data-fill="1"><svg class="ic" aria-hidden="true"><use href="#i-neural"/></svg><span class="welcome-card-title">Bir konuyu araştır</span><span class="welcome-card-copy">OpenAlex'te akademik kaynaklar bul</span></button>
+              <button type="button" class="welcome-card" data-cmd="bilgi ağı"><svg class="ic" aria-hidden="true"><use href="#i-system"/></svg><span class="welcome-card-title">Bağlantıları gör</span><span class="welcome-card-copy">Bilgi ağında yeni yollar keşfet</span></button>
+            </div>
           </div>
           <section class="history" aria-labelledby="hHist" id="historyWrap" hidden>
             <h2 class="sub-h" id="hHist">Önceki sorular</h2>
@@ -86,7 +93,7 @@ document.documentElement.setAttribute('data-theme',p)})();
         <form id="cmd" class="composer" autocomplete="off">
           <label class="vh" for="cmdInput">Sor ya da komut ver</label>
           <div class="composer-row">
-            <textarea id="cmdInput" name="cmd" rows="1" placeholder="Sor ya da komut ver…" aria-describedby="intent cmdHelp" enterkeyhint="send" maxlength="2000"></textarea>
+            <textarea id="cmdInput" name="cmd" rows="1" placeholder="Aklında ne var? AXIS'e sor…" aria-describedby="intent cmdHelp" enterkeyhint="send" maxlength="2000"></textarea>
             <button type="submit" class="primary" id="cmdGo" aria-label="Gönder" title="Gönder (Enter)"><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></button>
           </div>
           <div class="intent" id="intent" aria-live="polite"><b id="intentName">—</b><span id="intentPath"></span></div>
@@ -98,6 +105,7 @@ document.documentElement.setAttribute('data-theme',p)})();
             <button type="button" data-cmd="durum" title="Sistem durumu">durum</button>
             <button type="button" data-cmd="yardım" title="Tüm komutlar" aria-label="Yardım">?</button>
           </div>
+          <p class="composer-hint">Enter ile gönder <span aria-hidden="true">·</span> Shift+Enter ile yeni satır</p>
         </form>
       </section>
 
@@ -111,7 +119,7 @@ document.documentElement.setAttribute('data-theme',p)})();
               <span class="ag-count" id="agCount" aria-live="polite">Yükleniyor…</span>
               <button type="button" id="xorBtn" title="XOR sinir ağını incele">XOR</button>
               <button type="button" class="icon" id="agRefresh" aria-label="Ağı yenile" title="Yenile"><svg class="ic" aria-hidden="true"><use href="#i-updates"/></svg></button>
-              <button type="button" class="icon narrow-only" id="inspToggle" aria-label="Paneli aç/kapat" title="Panel" aria-controls="inspector"><svg class="ic" aria-hidden="true"><use href="#i-side"/></svg></button>
+              <button type="button" class="icon narrow-only" id="inspToggle" aria-label="Paneli aç/kapat" title="Panel" aria-controls="inspector" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-side"/></svg></button>
             </div>
             <div class="graph-host" id="graphHost"></div>
           </div>
@@ -149,6 +157,7 @@ document.documentElement.setAttribute('data-theme',p)})();
 
       <!-- ============ Güncellemeler ============ -->
       <section class="panel" id="panel-updates" aria-labelledby="viewTitle" hidden>
+        <p class="view-description">AXIS'in gelişimini takip et. Önerileri incele, değişiklikleri yönet.</p>
         <div id="approvals" tabindex="-1" class="card">
           <p class="auto-line"><span class="pill" id="autoMode" data-state="unknown">Otomatik güncelleme: —</span>
             <span class="hint" tabindex="0" title="Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa uygulanır. Korunan dosyalar: vector_upgrade.py, local_models.py, server.py, axis_sqlite.py, test_*.py. Kapatmak için sunucuyu AXIS_AUTO_APPLY=0 ile başlat. Diğer öneriler senin onayını bekler." aria-label="Docker testi PASS olmadan hiçbir çekirdek güncelleme uygulanmaz. Diğer öneriler senin onayını bekler.">?</span></p>
@@ -164,6 +173,7 @@ document.documentElement.setAttribute('data-theme',p)})();
 
       <!-- ============ Sistem ============ -->
       <section class="panel" id="panel-system" aria-labelledby="viewTitle" hidden>
+        <p class="view-description">Çalışma alanının nabzı. Bağlantılar, model ve son etkinlikler bir arada.</p>
         <ul class="status-list" id="statusRail">
           <li class="st" id="st-server" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sunucu</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-ollama" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ollama</span><span class="st-val">—</span><span class="st-note"></span></li>
@@ -186,7 +196,8 @@ document.documentElement.setAttribute('data-theme',p)})();
 
       <!-- ============ Araçlar ============ -->
       <section class="panel tools" id="panel-tools" aria-labelledby="viewTitle" hidden>
-        <p class="note">Bu araçlar dosya yazabilir; hiçbiri kendiliğinden çalışmaz.</p>
+        <p class="view-description">Araştır, geliştir ve öğren. Bir araç seçerek ayrıntılarını aç.</p>
+        <p class="note">Dosya oluşturabilen işlemler için açıklamaları ve onayları incele.</p>
         <details class="tool" id="panel-v4">
           <summary>Araştırma</summary>
           <div class="tool-body">
@@ -365,7 +376,7 @@ function showPane(name,title,open){
   $('#inspTitle').textContent=title||'Genel bakış';$('#inspBack').hidden=name==='overview';
   if(name!=='overview'||open)setSheet(true);
 }
-function setSheet(open){const i=$('#inspector');i.dataset.sheet=open?'open':'closed';$('#sheetBtn').setAttribute('aria-expanded',String(open));$('#sheetBtn').setAttribute('aria-label',open?'Paneli küçült':'Paneli büyüt')}
+function setSheet(open){const i=$('#inspector');i.dataset.sheet=open?'open':'closed';$('#sheetBtn').setAttribute('aria-expanded',String(open));$('#sheetBtn').setAttribute('aria-label',open?'Paneli küçült':'Paneli büyüt');$('#inspToggle').setAttribute('aria-expanded',String(open))}
 $('#inspBack').addEventListener('click',()=>{showPane('overview');const b=$('#xorBtn');if(b)b.focus()});
 $('#sheetBtn').addEventListener('click',()=>setSheet($('#inspector').dataset.sheet!=='open'));
 $('#inspToggle').addEventListener('click',()=>setSheet($('#inspector').dataset.sheet!=='open'));
@@ -475,11 +486,14 @@ $('#xorBtn').addEventListener('click',()=>{openNeural();graphFocus('neural')});
 $('#agRefresh').addEventListener('click',()=>loadNetwork());
 
 /* ---------------- Automatic read-only refresh ---------------- */
-let lastNodeCount=null,jobSeen=null;
+let lastNodeCount=null,jobSeen=null,researchJobs=[];
+const pendingResearch=new Set();
+function researchDetail(detail){const text=String(detail||'');return /\bHTTP(?: Error)?\s+429\b/i.test(text)?'OpenAlex istek sınırına ulaşıldı (HTTP 429). Bir süre bekleyip yeniden dene; aynı konuyu art arda başlatma.':text}
 function renderJobs(jobs){
+  researchJobs=jobs;
   const root=$('#jobs');root.replaceChildren();const next=new Map();let running=0,failed=0;
-  for(const j of jobs){const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${j.details}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
-    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+j.details,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok')}else if(j.status==='failed')feed('Araştırma FAILED: '+j.topic+' — '+j.details,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
+  for(const j of jobs){const detail=researchDetail(j.details);const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${detail}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
+    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+detail,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok')}else if(j.status==='failed')feed('Araştırma tamamlanamadı: '+j.topic+' — '+detail,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
   if(!jobs.length)root.append(el('p','empty','Henüz araştırma yok.'));
   jobSeen=next;
   setSt('jobs',failed?'fail':running?'warn':jobs.length?'ok':'notrun',running?running+' çalışıyor':jobs.length?'Boşta':'NOT RUN',failed?failed+' FAILED (son 15)':jobs.length?jobs.length+' kayıt':'Henüz iş yok');
@@ -667,10 +681,10 @@ cmdInput.addEventListener('input',e=>{autogrow();showIntent(parseIntent(e.target
 cmdInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();submitCmd()}});
 function submitCmd(){const f=$('#cmd');if(f.requestSubmit)f.requestSubmit();else $('#cmdGo').click()}
 $('#cmd').addEventListener('submit',async e=>{
-  e.preventDefault();const input=cmdInput,it=parseIntent(input.value);if(!it)return;
+  e.preventDefault();if($('#cmdGo').disabled)return;const input=cmdInput,submitted=input.value,it=parseIntent(submitted);if(!it)return;
   showIntent(it);feed('Seçilen eylem: '+it.name+' → '+it.path,'info');
   const go=$('#cmdGo');go.disabled=true;
-  try{await it.run();input.value='';autogrow()}catch(err){feed(it.name+': '+err.message,'fail',true);localAnswer(input.value.trim(),err.message,'FAILED','failed')}finally{go.disabled=false}
+  try{await it.run();if(input.value===submitted)input.value='';autogrow();showIntent(parseIntent(input.value))}catch(err){feed(it.name+': '+err.message,'fail',true);localAnswer(submitted.trim(),err.message,'FAILED','failed')}finally{go.disabled=false}
 });
 for(const b of document.querySelectorAll('[data-cmd]'))b.addEventListener('click',()=>{const i=cmdInput;i.value=b.dataset.cmd;autogrow();showIntent(parseIntent(i.value));if(b.dataset.fill){i.focus();return}submitCmd()});
 
@@ -728,9 +742,17 @@ async function cmdSynth(q){if(!q)throw Error('Konu yaz');const entry={q:'sentezl
   catch(e){entry.status='failed';entry.error=e.message}entry.finished=Date.now();renderAsks()}
 async function cmdResearch(topic,limit){
   if(topic.length<3)throw Error('Konu en az 3 karakter olmalı');
+  const key=norm(topic.trim()).replace(/\s+/g,' ');
+  if(pendingResearch.has(key)||researchJobs.some(j=>j.status==='running'&&norm(String(j.topic).trim()).replace(/\s+/g,' ')===key)){
+    localAnswer('araştır '+topic,'Bu konu için bir araştırma zaten sürüyor. İlerlemesini Ağ bölümündeki «Son araştırmalar» alanından takip edebilirsin.','Araştırma sürüyor');return;
+  }
   limit=limit||RESEARCH_DEFAULT;
-  const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(j.error||'Hata');
-  feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');reload();
+  pendingResearch.add(key);
+  try{
+    const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(researchDetail(r.status===429?'HTTP 429':j.error||'Hata'));
+    researchJobs=[{id:j.job_id,topic,status:'running'},...researchJobs];
+    feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');await reload();
+  }finally{pendingResearch.delete(key)}
 }
 function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · beceri ağı · öğrenme · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 
@@ -767,7 +789,7 @@ let railPref=null;try{const r=localStorage.getItem('axis-rail');if(r==='open'||r
 function applyRail(){const open=railPref?railPref==='open':innerWidth>=1280;$('#shell').dataset.rail=open?'open':'collapsed';const t=$('#railToggle');t.setAttribute('aria-expanded',String(open));t.dataset.tip=open?'Menüyü daralt':'Menüyü genişlet';t.querySelector('.rail-label').textContent=open?'Daralt':'Genişlet';t.setAttribute('aria-label',open?'Menüyü daralt':'Menüyü genişlet');requestAnimationFrame(placeIndicator)}
 $('#railToggle').addEventListener('click',()=>{railPref=$('#shell').dataset.rail==='open'?'collapsed':'open';try{localStorage.setItem('axis-rail',railPref)}catch(e){}applyRail()});
 window.addEventListener('resize',()=>{if(!railPref)applyRail();else placeIndicator()});
-const THEMES=['auto','dark','light'],TL={auto:'Otomatik',dark:'Koyu',light:'Açık'};let theme='auto';
+const THEMES=['dark','light','auto'],TL={auto:'Otomatik',dark:'Koyu',light:'Açık'};let theme='dark';
 try{const t=localStorage.getItem('theme')||localStorage.getItem('axis-theme');if(THEMES.includes(t))theme=t}catch(e){}
 const DARKQ=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):{matches:false};
 function applyTheme(){const resolved=theme==='auto'?(DARKQ.matches?'light':'dark'):theme;document.documentElement.setAttribute('data-theme',resolved);const b=$('#themeBtn'),label='Tema: '+TL[theme]+(theme==='auto'?' ('+TL[resolved]+')':'');b.title=label;b.setAttribute('aria-label',label+'. Değiştirmek için tıkla')}

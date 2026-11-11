@@ -190,6 +190,30 @@ def finding(**kw):
     return base
 
 class HardeningTests(unittest.TestCase):
+    def test_missing_keys_and_non_object_findings_fail_closed(self):
+        cases = [None, [], 'finding', 1]
+        for key in ('severity', 'file', 'line', 'confidence', 'explanation'):
+            entry = finding()
+            del entry[key]
+            cases.append(entry)
+        for entry in cases:
+            with self.subTest(entry=entry):
+                report, _ = self.run_one(fake_api(content=json.dumps({'findings': [entry]})))
+                self.assertEqual(report['status'], 'FAILED')
+                self.assertEqual(report['findings'], [])
+
+    def test_additional_invalid_metadata_fails_closed(self):
+        for kwargs in ({'prompt_eval': lambda n: -1}, {'done_reason': True}, {'done_reason': 123}):
+            with self.subTest(kwargs=kwargs):
+                report, _ = self.run_one(fake_api(**kwargs))
+                self.assertEqual(report['status'], 'FAILED')
+                self.assertEqual(report['findings'], [])
+
+    def test_url_scrub_preserves_following_email(self):
+        result = m.scrub('https://user:pw123@host/x contact dev@example.com')
+        self.assertNotIn('pw123', result)
+        self.assertIn('host/x contact dev@example.com', result)
+
     def run_one(self, api):
         with tempfile.TemporaryDirectory() as d:
             directory, result=m.run(['axis_sqlite.py'], {'Reviewer':'local:1'}, Path(d), api)
