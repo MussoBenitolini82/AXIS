@@ -149,6 +149,22 @@ class TargetValidationTests(Base):
         self.assertEqual(vu.safe_target('alpha.py'), self.root / 'alpha.py')
         self.assertFalse(vu.auto_eligible('alpha.py'))
 
+    def test_dunder_private_uppercase_and_stdlib_names_refused(self):
+        bad = ['extensions/__init__.py', 'extensions/__main__.py', 'extensions/_x.py', 'extensions/Foo.py',
+               'extensions/json.py', 'extensions/OS.py', '__init__.py', '__main__.py', '_private.py',
+               'json.py', 'os.py', 'Json.py']
+        for name in bad:
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError):
+                    vu.safe_target(name)
+                self.assertFalse(vu.auto_eligible(name))
+                with self.assertRaises(ValueError):
+                    vu.propose(name, NEW, 'x')
+        self.assertEqual(vu.listing(), [])
+        self.assertEqual(vu.safe_target('extensions/good_name.py'), self.root / 'extensions' / 'good_name.py')
+        self.assertTrue(vu.auto_eligible('extensions/good_name.py'))
+        self.assertEqual(vu.safe_target('my_module.py'), self.root / 'my_module.py')
+
 
 class StagedSourceTests(Base):
     def test_copy_contents_and_exclusions_top_level(self):
@@ -222,6 +238,8 @@ class ContainerTests(Base):
                      ('--user', '65534:65534'), ('python', '-I'), ('-c', vu.VERIFY_SCRIPT)):
             self.assertTrue(_pair(cmd, x, y), (x, y))
         self.assertIn('--read-only', cmd)
+        self.assertIn('--pull=never', cmd)  # a missing image must never be fetched from the network
+        self.assertLess(cmd.index('--pull=never'), cmd.index(vu.IMAGE))
         self.assertEqual(cmd.count('--mount'), 1)
         mount = cmd[cmd.index('--mount') + 1]
         self.assertTrue(mount.startswith('type=bind,src='))
@@ -376,6 +394,30 @@ class ContainerTests(Base):
                 if expect == 0:
                     self.assertEqual(result['report'].splitlines()[1:4],
                                      ['CONTRACT: PASS', 'BEHAVIOR: PASS', 'SUITE: PASS'])
+
+    def test_missing_image_blocked_without_pull(self):
+        self.fake_tree()
+        for text in ('docker: Error response from daemon: No such image: python:3.12-slim',
+                     "Unable to find image 'python:3.12-slim' locally"):
+            with self.subTest(text=text):
+                uid = self.propose_ext(cases=[{'function': 'f', 'args': [], 'expected': 1}])
+                a, r, run = self.docker(returncode=125, stdout=text, proof=False)
+                with a, r:
+                    result = vu.verify(uid)
+                self.assertFalse(result['passed'])
+                lines = result['report'].splitlines()
+                self.assertEqual(lines[0], 'BLOCKED: python:3.12-slim imajı yerelde yok; internete çıkılmadı. '
+                                           'Kendiniz indirin: docker pull python:3.12-slim')
+                self.assertEqual(lines[1:4], ['CONTRACT: NOT RUN', 'BEHAVIOR: NOT RUN', 'SUITE: NOT RUN'])
+                self.assertIn('--pull=never', run.call_args_list[0][0][0])
+                self.assertEqual(vu.detail(uid)['status'], 'pending')
+        # Exit 125 for any other reason stays an ordinary container error.
+        uid = self.propose_ext(cases=[{'function': 'f', 'args': [], 'expected': 1}])
+        a, r, _ = self.docker(returncode=125, stdout='docker: invalid reference format', proof=False)
+        with a, r:
+            result = vu.verify(uid)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['report'].startswith('FAIL'), result['report'])
 
 
 class ReviewFindingTests(Base):

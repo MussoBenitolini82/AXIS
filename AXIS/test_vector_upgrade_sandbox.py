@@ -78,6 +78,8 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
             self.assertTrue(_pair(cmd, a, b), (a, b))
         self.assertIn('--read-only', cmd)
         self.assertIn('python:3.12-slim', cmd)
+        self.assertIn('--pull=never', cmd)
+        self.assertLess(cmd.index('--pull=never'), cmd.index('python:3.12-slim'))
         mount = cmd[cmd.index('--mount') + 1]
         self.assertIn('readonly', mount)
         self.assertIn('dst=/work', mount)

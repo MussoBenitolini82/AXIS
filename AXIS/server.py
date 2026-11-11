@@ -179,7 +179,7 @@ def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
     index_memory(to_index)
     try:brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception:pass
-    if AFTER_RESEARCH: AFTER_RESEARCH()  # running server only: embed new abstracts in the background
+    if MEMORY_INDEXING: _MEM_WAKE.set()  # running server only: the memory worker embeds the new topic/concept/paper nodes
 
 def fail_stale_jobs():
     """At start-up no research thread is alive, so any job still 'running' was cut off by a restart."""
@@ -188,8 +188,6 @@ def fail_stale_jobs():
         db.commit()
     return n
 
-AFTER_RESEARCH=None  # set in __main__; tests and imports never start background embedding
-
 # ---------------- Semantic memory index (axis_memory) ----------------
 MEMORY_INDEXING=False  # switched on in __main__: imports and tests must never write to the real index
 MEMORY_BATCH=64
@@ -197,6 +195,7 @@ MEMORY_MAX_BATCHES=200
 _MEM_WAKE=threading.Event()
 _MEM_THREAD=[None]
 _MEM_STOP=threading.Event()
+_MEM_RUN=threading.Lock()  # one embedding pass at a time: the worker and /api/memory-backfill never overlap
 
 def index_memory(items):
     """Upsert items into axis_memory and wake the worker; returns how many were stored (0 when off or failed). Never raises."""
@@ -207,19 +206,36 @@ def index_memory(items):
     return len(items)
 
 def memory_sync_once():
-    """One pass: graph nodes -> axis_memory rows, then embed what is pending in bounded batches."""
-    with LOCK,connect() as db:
-        rows=[dict(x) for x in db.execute('SELECT n.id,n.kind,n.label,n.description,(SELECT s.abstract FROM evidence e JOIN sources s ON s.id=e.source_id WHERE e.node_id=n.id LIMIT 1) AS abstract FROM nodes n')]
-    # A paper's text is its abstract (the same text research indexes), so the two writers never flip the digest.
-    items=[{'id':r['id'],'kind':r['kind'],'label':r['label'],'text':(r['abstract'] if r['kind']=='paper' and r['abstract'] else r['description']) or ''} for r in rows]
-    synced=0
-    for i in range(0,len(items),500): synced+=axis_memory.upsert_many(items[i:i+500])
-    embedded=pending=0;available=None
-    for _ in range(MEMORY_MAX_BATCHES):
-        r=axis_memory.backfill(MEMORY_BATCH)
-        embedded+=r['embedded'];pending=r['pending'];available=r['available']
-        if not pending or not r['available'] or not r['embedded']: break
-    return {'synced':synced,'embedded':embedded,'pending':pending,'available':available}
+    """One pass: graph nodes -> axis_memory rows, drop rows of deleted nodes, then embed what is pending in bounded batches."""
+    with _MEM_RUN:
+        cutoff=datetime.now(timezone.utc).isoformat(timespec='seconds')  # rows indexed after this snapshot (research/PDF running right now) are never pruned
+        with LOCK,connect() as db:
+            rows=[dict(x) for x in db.execute('SELECT n.id,n.kind,n.label,n.description,(SELECT s.abstract FROM evidence e JOIN sources s ON s.id=e.source_id WHERE e.node_id=n.id LIMIT 1) AS abstract FROM nodes n')]
+            pdfs={r[0].partition(':')[2] for r in db.execute("SELECT id FROM sources WHERE id LIKE 'local-pdf:%'")}
+        # A paper's text is its abstract (the same text research indexes), so the two writers never flip the digest.
+        items=[{'id':r['id'],'kind':r['kind'],'label':r['label'],'text':(r['abstract'] if r['kind']=='paper' and r['abstract'] else r['description']) or ''} for r in rows]
+        synced=0
+        for i in range(0,len(items),500): synced+=axis_memory.upsert_many(items[i:i+500])
+        # An empty graph is never read as "everything was deleted": a blank or wrong vector.db must not wipe the index.
+        pruned=axis_memory.prune({r['id'] for r in rows},pdfs,before=cutoff) if rows else 0
+        embedded=pending=0;available=None
+        for _ in range(MEMORY_MAX_BATCHES):
+            r=axis_memory.backfill(MEMORY_BATCH)
+            embedded+=r['embedded'];pending=r['pending'];available=r['available']
+            if not pending or not r['available'] or not r['embedded']: break
+        return {'synced':synced,'pruned':pruned,'embedded':embedded,'pending':pending,'available':available}
+
+def memory_worker_busy():
+    """True while an embedding pass (worker or manual backfill) is running."""
+    return _MEM_RUN.locked()
+
+def memory_backfill(limit=64):
+    """Manual backfill for /api/memory-backfill; answers 'busy' instead of embedding the same rows as the worker."""
+    if not _MEM_RUN.acquire(blocking=False):
+        s=axis_memory.status()
+        return {'embedded':0,'pending':max(s['items']-s['embedded'],0),'available':s['available'],'busy':True,'note':'Arka plan dizinleyici şu anda çalışıyor; bekleyen kayıtları o gömüyor'}
+    try: return {**axis_memory.backfill(limit),'busy':False}
+    finally: _MEM_RUN.release()
 
 def _memory_worker():
     while not _MEM_STOP.is_set():
@@ -241,13 +257,6 @@ def stop_memory_worker(timeout=5):
     t=_MEM_THREAD[0]
     if t: t.join(timeout)
 
-def start_rag_embedding():
-    try:
-        import rag
-        return rag.start_embedding()
-    except Exception as e:  # retrieval index is optional: never fail research because of it
-        print('RAG gömme başlatılamadı:',type(e).__name__)
-        return False
 
 def start_research(topic,limit=RESEARCH_DEFAULT_LIMIT):
     topic=topic.strip()[:180]
@@ -439,7 +448,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/skill-run':
                 import skill_runner
                 return self.send(200,skill_runner.run(data.get('skill'),data.get('data')))
-            if self.path=='/api/memory-backfill': return self.send(200,axis_memory.backfill(64))
+            if self.path=='/api/memory-backfill': return self.send(200,memory_backfill(64))
             if self.path=='/api/axis-v13-models': return self.send(200,axis_v13.model_suggestions(str(data.get('request',''))))
             if self.path=='/api/axis-record': return self.send(201,{'id':axis_learning.record(str(data.get('task_id','')),str(data.get('agent','')),str(data.get('kind','')),str(data.get('tool','')),str(data.get('outcome','')),data.get('payload',{}))})
             if self.path=='/api/axis-learn': return self.send(200,axis_learning.learn())
@@ -496,9 +505,7 @@ if __name__=='__main__':
     upgrades.SCHEDULER=lambda uid: POOL.submit(upgrades.auto_pipeline,uid)
     queued=upgrades.sweep_untested()
     print('Otomatik güncelleme:',('açık' if upgrades.auto_apply_enabled() else 'kapalı (AXIS_AUTO_APPLY)'),'· kuyruğa alınan:',len(queued))
-    AFTER_RESEARCH=start_rag_embedding
     MEMORY_INDEXING=True
-    start_memory_worker()
-    print('Anlamsal dizin (bge-m3):','arka planda güncelleniyor' if start_rag_embedding() else 'başlatılamadı')
+    print('Anlamsal dizin (%s):'%axis_memory.EMBED_MODEL,'arka planda güncelleniyor' if start_memory_worker() else 'başlatılamadı')
     print('AXIS Brain: http://127.0.0.1:8765')
     ThreadingHTTPServer(('127.0.0.1',8765),Handler).serve_forever()

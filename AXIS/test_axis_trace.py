@@ -34,6 +34,8 @@ class Isolated(unittest.TestCase):
             p = patch.object(mod, 'DB', val)
             p.start()
             self.addCleanup(p.stop)
+        axis_trace._reset_cache()  # the load cache is process-wide; never let rows leak between tests
+        self.addCleanup(axis_trace._reset_cache)
 
     def events(self, task_id=None):
         return axis_learning.events(task_id)
@@ -225,6 +227,42 @@ class DurationTests(Isolated):
         s = axis_trace.summary()
         self.assertEqual(s['avg_duration_ms'], 5005)
         self.assertEqual(s['slowest'][0]['task_id'], 'S1')
+
+
+class LoadCacheTests(Isolated):
+    def setUp(self):
+        super().setUp()
+        self.clock = [1000.0]
+        p = patch.object(axis_trace, '_clock', lambda: self.clock[0])
+        p.start()
+        self.addCleanup(p.stop)
+        add_event('C1', 'coder', 'span', 'x', 'success', '2026-01-01T10:00:00+00:00')
+        p = patch.object(axis_trace, '_load', wraps=axis_trace._load)
+        self.load = p.start()
+        self.addCleanup(p.stop)
+
+    def test_summary_performs_single_load(self):
+        s = axis_trace.summary()
+        self.assertEqual(s['tasks'], 1)
+        self.assertEqual(self.load.call_count, 1)
+
+    def test_cache_hit_within_ttl_avoids_second_load(self):
+        axis_trace.tasks()
+        self.clock[0] += axis_trace.CACHE_TTL - 0.5
+        axis_trace.tasks()
+        axis_trace.summary()
+        self.assertEqual(self.load.call_count, 1)
+
+    def test_expiry_reloads(self):
+        axis_trace.tasks()
+        self.clock[0] += axis_trace.CACHE_TTL + 0.1
+        axis_trace.tasks()
+        self.assertEqual(self.load.call_count, 2)
+
+    def test_trace_by_id_is_not_cached(self):
+        axis_trace.trace('C1')
+        axis_trace.trace('C1')
+        self.assertEqual(self.load.call_count, 2)
 
 
 class HostilePayloadTests(Isolated):

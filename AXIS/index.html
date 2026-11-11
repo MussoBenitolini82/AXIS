@@ -521,8 +521,10 @@ async function reload(){
   }catch(e){$('#msg').textContent='Sunucu bağlantısı kurulamadı';return false}
 }
 async function refreshRag(){
-  try{const r=await getJSON('/api/rag-status');const n=r.embedded_docs||0,t=r.fts_docs||0;
-    setSt('rag',r.last_error?'fail':r.running?'warn':n?'ok':'notrun',n+' / '+t+' belge',r.last_error?String(r.last_error):r.running?'gömülüyor ('+(r.embed_model||'')+')':n?(r.embed_model||''):'henüz gömülmedi')}
+  try{const r=await getJSON('/api/rag-status');const n=+r.embedded_docs||0,m=+r.memory_items||0,t=+r.fts_docs||0,p=+r.pending||0;
+    // Embeddings come from axis_memory (graph nodes + PDF chunks); the FTS index counts documents.
+    const model=String(r.embed_model||''),fts=' · tam metin: '+t+' belge';
+    setSt('rag',r.last_error?'fail':(r.running||p)?'warn':n?'ok':'notrun',n+' / '+m+' kayıt',r.last_error?String(r.last_error):r.running?'gömülüyor ('+model+')'+fts:p?p+' kayıt bekliyor'+fts:n?model+fts:'henüz gömülmedi'+fts)}
   catch(e){setSt('rag','unknown','—','')}
 }
 async function refreshHealth(){

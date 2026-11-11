@@ -313,6 +313,35 @@ class ReviewFixTests(MemoryCase):
         self.assertEqual(axis_memory.recommended_min_score(), 0.35)
 
 
+class PruneTests(MemoryCase):
+    def ids(self):
+        with axis_memory._open() as db:
+            return sorted(r['id'] for r in db.execute('SELECT id FROM items'))
+
+    def setUp(self):
+        super().setUp()
+        axis_memory.upsert_many([{'id': 'topic:a', 'kind': 'topic', 'label': 'A', 'text': 'a'},
+                                 {'id': 'paper:gone', 'kind': 'paper', 'label': 'G', 'text': 'g'},
+                                 {'id': 'chunk:pdf1:0', 'kind': 'chunk', 'label': 'c', 'text': 'c'},
+                                 {'id': 'chunk:pdf2:0', 'kind': 'chunk', 'label': 'c', 'text': 'c'}])
+
+    def test_removes_rows_of_deleted_nodes_and_keeps_chunks(self):
+        self.assertEqual(axis_memory.prune({'topic:a'}), 1)
+        self.assertEqual(self.ids(), ['chunk:pdf1:0', 'chunk:pdf2:0', 'topic:a'])
+        self.assertEqual(axis_memory.prune({'topic:a'}), 0)  # idempotent
+
+    def test_chunks_go_only_when_their_source_is_known_to_be_gone(self):
+        self.assertEqual(axis_memory.prune({'topic:a', 'paper:gone'}, {'pdf1'}), 1)
+        self.assertEqual(self.ids(), ['chunk:pdf1:0', 'paper:gone', 'topic:a'])
+
+    def test_rows_newer_than_the_snapshot_are_kept(self):
+        with axis_memory._open() as db:
+            db.execute("UPDATE items SET created='2020-01-01T00:00:00+00:00' WHERE id='paper:gone'")
+            db.execute("UPDATE items SET created='2030-01-01T00:00:00+00:00' WHERE id='topic:a'")
+        self.assertEqual(axis_memory.prune(set(), set(), before='2025-01-01T00:00:00+00:00'), 1)
+        self.assertEqual(self.ids(), ['chunk:pdf1:0', 'chunk:pdf2:0', 'topic:a'])
+
+
 class EmbedShapeTests(MemoryCase):
     def test_normalised_batched_truncated(self):
         fake = self.use(Fake())

@@ -23,7 +23,7 @@ import central_brain
 import self_evolution
 import vector_upgrade
 
-IMAGE = 'python:3.12-slim'
+IMAGE = vector_upgrade.IMAGE
 MAX_INPUT = 20000
 MAX_OUTPUT = 20000
 MAX_CAPTURE = 65536
@@ -344,7 +344,7 @@ def run(skill, data, timeout=20):
             (work / "runner.py").write_text(RUNNER_SOURCE, encoding="utf-8")
             name = "axis-skill-" + secrets.token_hex(16)
             command = [
-                'docker', 'run', '--rm', '--name', name,
+                'docker', 'run', '--rm', '--pull=never', '--name', name,
                 '--network', 'none', '--read-only', '--cap-drop', 'ALL',
                 '--security-opt', 'no-new-privileges', '--pids-limit', '64',
                 '--memory', '256m', '--memory-swap', '256m', '--cpus', '1',
@@ -367,6 +367,8 @@ def run(skill, data, timeout=20):
             if reason == 'overflow':
                 return finish("failure", error="Beceri çıktısı 64 KB sınırını aştı; konteyner durduruldu."
                               + note)
+            if reason is None and vector_upgrade.image_missing(code, (stdout or "") + (stderr or "")):
+                return finish("blocked", error=vector_upgrade.IMAGE_MISSING + note)
             process = subprocess.CompletedProcess(command, code, stdout, stderr)
             status, output, error = _parse_result(process, marker)
             return finish(status, output, error + note if error else error)

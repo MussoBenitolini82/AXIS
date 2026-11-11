@@ -3,6 +3,7 @@
 Creates no database of its own; it only reads the two existing stores and times spans.
 """
 import json
+import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,11 @@ EVENT_SQL = ('SELECT task_id, agent, kind, tool, outcome, created, '
 EXP_SQL = ('SELECT task_id, agent, action, tool, status, substr(summary, 1, 300) AS summary, created '
            'FROM experiences')
 _FLOOR = datetime.min.replace(tzinfo=timezone.utc)
+# The unfiltered load is reused for CACHE_TTL seconds so repeated polls do no DB work.
+CACHE_TTL = 4.0
+_clock = time.monotonic
+_cache_lock = threading.Lock()
+_cache = None  # (loaded_at, grouped) for the unfiltered load
 
 
 class _Span:
@@ -45,6 +51,7 @@ def _record_span(task_id, agent, stage, model, outcome, started, error, s):
         if s.notes:
             payload['detail'] = '; '.join(f'{k}={v}' for k, v in s.notes.items())[:300]
         axis_learning.record(task_id, agent, 'span', stage, outcome, payload)
+        _reset_cache()  # a span written here must show up on the next read, not after CACHE_TTL
     except BaseException:
         pass  # observability must never change the traced block's result
 
@@ -144,6 +151,25 @@ def _load(task_id=None):
     return grouped
 
 
+def _reset_cache():
+    global _cache
+    with _cache_lock:
+        _cache = None
+
+
+def _load_all():
+    """Unfiltered _load(), reused within CACHE_TTL. Holding the lock during the load also stops
+    concurrent polls from loading the same rows twice."""
+    global _cache
+    with _cache_lock:
+        now = _clock()
+        if _cache is not None and 0 <= now - _cache[0] < CACHE_TTL:
+            return _cache[1]
+        grouped = _load()
+        _cache = (now, grouped)
+        return grouped
+
+
 def _status(steps):
     outcomes = {s['outcome'] for s in steps}
     if 'failure' in outcomes:
@@ -166,14 +192,10 @@ def _timing(steps):
     return started.isoformat(), finished.isoformat(), max(0, (finished - started) // timedelta(milliseconds=1))
 
 
-def tasks(limit=30, include_api=False):
-    try:
-        limit = int(limit)
-    except (TypeError, ValueError):
-        limit = 30
-    limit = max(1, min(100, limit))
+def _summaries(grouped, include_api=False):
+    """All task summaries from one loaded {task_id: [steps]} mapping, newest finish first."""
     result = []
-    for task_id, steps in _load().items():
+    for task_id, steps in grouped.items():
         if not include_api and all(s['source'] == 'event' and s['kind'] == 'api_request' for s in steps):
             continue
         started, finished, duration = _timing(steps)
@@ -186,7 +208,16 @@ def tasks(limit=30, include_api=False):
             'steps': len(steps), 'title': title[:120],
         })
     result.sort(key=lambda t: _parse_time(t['finished']) or _FLOOR, reverse=True)
-    return result[:limit]
+    return result
+
+
+def tasks(limit=30, include_api=False):
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 30
+    limit = max(1, min(100, limit))
+    return _summaries(_load_all(), include_api)[:limit]
 
 
 def trace(task_id):
@@ -199,7 +230,8 @@ def trace(task_id):
 
 
 def summary():
-    items = tasks(limit=100)
+    # Same rows and filter as tasks(limit=100), built from one load instead of a second one.
+    items = _summaries(_load_all())[:100]
     durations = [t['duration_ms'] for t in items]
     slowest = sorted(items, key=lambda t: t['duration_ms'], reverse=True)[:3]
     return {

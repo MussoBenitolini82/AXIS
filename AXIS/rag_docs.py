@@ -1,4 +1,4 @@
-"""Shared document set for AXIS retrieval (full-text and embedding indexes).
+"""Document set of the AXIS full-text index (embeddings live in axis_memory, not here).
 
 A document is one academic source (title + abstract) or one non-paper knowledge node
 (topic/concept/skill…: label + description). Paper nodes are skipped: they duplicate sources.

@@ -203,6 +203,30 @@ def delete(item_id):
         db.execute('DELETE FROM items WHERE id=?', (str(item_id),))
 
 
+def prune(live_ids, live_chunk_sources=None, before=None):
+    """Delete rows whose graph node is gone; returns how many were removed.
+
+    A non-chunk row is removed when its id is not in `live_ids`. A chunk ('chunk:<source>:<n>') is kept
+    unless `live_chunk_sources` is given and does not contain its <source>. Rows created at or after
+    `before` (ISO UTC, as stored) are kept, so items indexed while the caller took its snapshot survive."""
+    live_ids = set(live_ids)
+    sources = None if live_chunk_sources is None else set(live_chunk_sources)
+    with LOCK, _open() as db:
+        doomed = []
+        for r in db.execute('SELECT id,kind,created FROM items').fetchall():
+            if before is not None and (r['created'] or '') >= before:
+                continue
+            if r['kind'] == 'chunk':
+                parts = r['id'].split(':')
+                gone = sources is not None and len(parts) >= 3 and parts[1] not in sources
+            else:
+                gone = r['id'] not in live_ids
+            if gone:
+                doomed.append((r['id'],))
+        db.executemany('DELETE FROM items WHERE id=?', doomed)
+    return len(doomed)
+
+
 _PENDING = '(embedding IS NULL OR model IS NULL OR model<>?)'
 
 

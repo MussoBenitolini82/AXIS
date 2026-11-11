@@ -1,3 +1,5 @@
+> Not (2026-11-11): Bu inceleme dosyanın daha eski bir sürümüne aittir; buradaki sha256 değerleri güncel kodla eşleşmiyor. Güncel kod bu sağlayıcı tarafından incelenmedi. Son bağımsız inceleme: Claude Opus 5.5, 2026-11-11 (yerel, salt-okunur).
+
 Reviewer: OpenAI Codex
 Model (from rollout): gpt-6.1-sol (all parts; MODEL line read from each rollout poll)
 Date: 2026-11-11

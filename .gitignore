@@ -19,3 +19,6 @@ AXIS/models/
 AXIS/logs/
 .DS_Store
 reports/[0-9]*T[0-9]*-*/
+
+# graphify knowledge graph (local, regenerated with: graphify update AXIS)
+graphify-out/

@@ -22,6 +22,7 @@ import axis_memory
 import axis_trace
 import axis_v13
 import central_brain
+import rag
 import self_evolution
 import server
 import skill_runner
@@ -118,25 +119,33 @@ class SemanticAnswerTests(Base):
     def hits(self, *rows):
         return mock.patch.object(axis_memory, 'semantic_search', return_value=list(rows))
 
-    def test_merge_keyword_first_then_semantic_chunk_and_node(self):
+    def test_retrieve_fuses_keyword_node_and_chunk_hits_from_axis_memory(self):
         kw, other = self.seed([('kuantum hesaplama', 'topic', 'kuantum bilgisayarlar'), ('Bilgi kuramı', 'concept', 'entropi')])
         with self.hits({'id': kw, 'kind': 'topic', 'label': 'x', 'text': 'x', 'score': .9},
                        {'id': 'chunk:abc:2', 'kind': 'chunk', 'label': 'Kitap.pdf · bölüm 3', 'text': 'Ç' * 900, 'score': .8},
                        {'id': other, 'kind': 'concept', 'label': 'x', 'text': 'x', 'score': .7},
                        {'id': 'concept:silinmis', 'kind': 'concept', 'label': 'y', 'text': 'y', 'score': .6}) as ss:
-            items = vi.relevant_memory('kuantum')
-            self.assertEqual([r['id'] for r in items], [kw, 'chunk:abc:2', other])
-            self.assertEqual(items[1], {'id': 'chunk:abc:2', 'label': 'Kitap.pdf · bölüm 3', 'kind': 'chunk', 'description': 'Ç' * 900})
-            self.assertEqual(items[2]['label'], 'Bilgi kuramı')  # a graph node comes back as its own row
+            docs, info = rag.retrieve('kuantum', vi.MAX_MEMORY_ITEMS, extra=[{'doc_id': 'node:' + kw}])
+            # keyword + full-text + embedding agree on kw: it leads; a deleted node's stale embedding is dropped
+            self.assertEqual([d['doc_id'] for d in docs], ['node:' + kw, 'chunk:chunk:abc:2', 'node:' + other])
+            self.assertEqual(docs[1], {'doc_id': 'chunk:chunk:abc:2', 'node_id': None, 'kind': 'chunk', 'title': 'Kitap.pdf · bölüm 3',
+                                       'url': None, 'year': None, 'text': 'Ç' * 900, 'semantic': True})
+            self.assertEqual(docs[2]['title'], 'Bilgi kuramı')  # a graph node comes back as its own row
+            self.assertEqual((info['mode'], info['semantic_hits']), ('hibrit', 4))
+            ss.assert_called_once()
             self.assertEqual(ss.call_args.args[0], 'kuantum')
             self.assertEqual(ss.call_args.kwargs['min_score'], axis_memory.recommended_min_score())
+            self.assertEqual([r['id'] for r in vi.relevant_memory('kuantum')], [kw])  # keyword only: no second scan
+            ss.assert_called_once()
         self.assertEqual(vi.MAX_MEMORY_ITEMS, 8)
 
     def test_semantic_hits_capped_at_max_items(self):
         self.seed([('kuantum a', 'topic', 'x')])
         rows = [{'id': 'chunk:z:%d' % i, 'kind': 'chunk', 'label': 'c', 'text': 't', 'score': .9} for i in range(20)]
         with self.hits(*rows):
-            self.assertEqual(len(vi.relevant_memory('kuantum')), 8)
+            r = vi.answer_question('kuantum')
+        self.assertEqual(len(r['sources']), 8)
+        self.assertEqual([s['no'] for s in r['sources']], list(range(1, 9)))
 
     def test_chunk_text_reaches_prompt_and_result_flags_semantic(self):
         self.seed([('Fotosentez', 'concept', 'bitkiler')])
@@ -163,7 +172,7 @@ class SemanticAnswerTests(Base):
     def test_missing_recommended_min_score_falls_back(self):
         self.seed([('neural networks', 'topic', 'x')])
         with mock.patch.object(axis_memory, 'recommended_min_score', None), self.hits() as ss:
-            vi.relevant_memory('neural')
+            vi.answer_question('neural')
         self.assertEqual(ss.call_args.kwargs['min_score'], 0.55)
 
     def test_end_to_end_with_real_axis_memory_and_fake_embeddings(self):
@@ -475,6 +484,45 @@ class MemoryTests(HttpBase):
         self.assertEqual((r['embedded'], r['pending']), (0, 1))
         self.assertEqual(self.embed.call_count, 1)
 
+    def test_sync_once_prunes_rows_of_deleted_nodes_but_not_fresh_or_chunk_rows(self):
+        keep, gone = self.seed([('Kuantum konu', 'topic', 'kuantum'), ('Eski kavram', 'concept', 'x')])
+        axis_memory.upsert_many([{'id': 'chunk:pdfyok:0', 'kind': 'chunk', 'label': 'c', 'text': 'kuantum'},
+                                 {'id': 'concept:yeni', 'kind': 'concept', 'label': 'şu an dizinlenen', 'text': 'x'}])
+        server.memory_sync_once()
+        with server.connect() as db:
+            db.execute('DELETE FROM nodes WHERE id=?', (gone,))
+            db.commit()
+        with axis_memory._open() as db:  # everything but the in-flight row is older than the next snapshot
+            db.execute("UPDATE items SET created='2020-01-01T00:00:00+00:00' WHERE id<>'concept:yeni'")
+        r = server.memory_sync_once()
+        self.assertEqual(r['pruned'], 2)  # the deleted node and the chunk whose PDF source no longer exists
+        with axis_memory._open() as db:
+            self.assertEqual(sorted(x['id'] for x in db.execute('SELECT id FROM items')), ['concept:yeni', keep])
+        with server.connect() as db:
+            db.execute('DELETE FROM nodes')
+            db.commit()
+        self.assertEqual(server.memory_sync_once()['pruned'], 0)  # an empty graph never wipes the index
+
+    def test_manual_backfill_answers_busy_while_a_pass_is_running(self):
+        axis_memory.upsert('a', 'concept', 'Kuantum', 'metin')
+        with server._MEM_RUN:
+            self.assertTrue(server.memory_worker_busy())
+            code, r = self.call('/api/memory-backfill', {})
+            self.assertEqual((code, r['busy'], r['embedded'], r['pending']), (200, True, 0, 1))
+        self.embed.assert_not_called()
+        code, r = self.call('/api/memory-backfill', {})
+        self.assertEqual((r['busy'], r['embedded'], r['pending']), (False, 1, 0))
+        self.assertFalse(server.memory_worker_busy())
+
+    def test_rag_status_reports_axis_memory_and_fts_counts(self):
+        self.seed([('Kuantum konu', 'topic', 'kuantum'), ('Fotosentez', 'concept', 'bitki')])
+        axis_memory.upsert('chunk:p:0', 'chunk', 'c', 'kuantum')
+        server.memory_sync_once()
+        vi.answer_question('kuantum')  # builds the FTS index
+        code, r = self.call('/api/rag-status')
+        self.assertEqual((code, r['embedded_docs'], r['memory_items'], r['pending'], r['fts_docs']), (200, 3, 3, 0, 2))
+        self.assertEqual((r['embed_model'], r['store'], r['running'], r['last_error']), (axis_memory.EMBED_MODEL, 'memory.sqlite3', False, None))
+
     def test_background_worker_syncs_without_blocking(self):
         self.seed([('Kuantum konu', 'topic', 'kuantum')])
         self.addCleanup(server.stop_memory_worker)
@@ -550,15 +598,20 @@ class RobustnessTests(HttpBase):
         self.assertFalse(r['semantic'])
         self.assertNotIn('chunk:abc:0', [m['id'] for m in r['used_memory']])
 
-    def test_semantic_hits_get_reserved_slots_when_keywords_fill_everything(self):
+    def test_semantic_hits_reach_the_prompt_when_keywords_fill_everything(self):
         self.seed([('neural network %d' % i, 'paper', 'neural network') for i in range(12)])
         with self.hits({'id': 'chunk:a:0', 'kind': 'chunk', 'label': 'c0', 'text': 't0', 'score': .9},
                        {'id': 'chunk:a:1', 'kind': 'chunk', 'label': 'c1', 'text': 't1', 'score': .8}):
-            items = vi.relevant_memory('neural network')
-        self.assertEqual(len(items), 7)
-        self.assertEqual([r['id'] for r in items[5:]], ['chunk:a:0', 'chunk:a:1'])
+            r = vi.answer_question('neural network')
+        used = [m['id'] for m in r['used_memory']]
+        self.assertEqual(len(used), 8)
+        self.assertIn('chunk:a:0', used)  # rank fusion: the best embedding hits sit beside the best keyword hits
+        self.assertIn('chunk:a:1', used)
+        self.assertTrue(r['semantic'])
         with self.hits():
-            self.assertEqual(len(vi.relevant_memory('neural network')), 8)  # no semantic hits: today's behaviour
+            r = vi.answer_question('neural network')
+        self.assertEqual(len(r['used_memory']), 8)  # no semantic hits: today's behaviour
+        self.assertFalse(r['semantic'])
 
     def test_pdf_chunk_count_is_what_was_stored(self):
         raw = MemoryTests.make_pdf(self, 1)

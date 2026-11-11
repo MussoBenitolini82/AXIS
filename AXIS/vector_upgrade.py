@@ -6,7 +6,7 @@ AXIS file. Only 'extensions/<name>.py' targets may be applied automatically, and
 extension modules by itself. Top-level modules always need a human decision (decide(...,'ONAYLIYORUM')).
 """
 from axis_sqlite import ClosingConnection
-import ast, difflib, hashlib, json, os, re, secrets, shutil, sqlite3, subprocess, tempfile, threading, uuid
+import ast, difflib, hashlib, json, os, re, secrets, shutil, sqlite3, subprocess, sys, tempfile, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,7 +21,15 @@ TESTS=DATA/'behavior_specs'; TESTS.mkdir(exist_ok=True)
 PROTECTED=frozenset({'vector_upgrade.py','local_models.py','server.py','axis_sqlite.py'})
 _MODULE_NAME=re.compile(r'[A-Za-z_][A-Za-z0-9_]*\.py')
 EXTENSIONS='extensions'
-_EXT_TARGET=re.compile(r'extensions/([A-Za-z_][A-Za-z0-9_]*\.py)')
+_EXT_TARGET=re.compile(r'extensions/([A-Za-z_][A-Za-z0-9_]*\.py)')  # shape only; safe_target enforces lowercase
+_EXT_NAME=re.compile(r'[a-z][a-z0-9_]*\.py')
+# Docker must never pull from the network; a missing image is reported, not fetched.
+IMAGE='python:3.12-slim'
+IMAGE_MISSING=f'BLOCKED: {IMAGE} imajı yerelde yok; internete çıkılmadı. Kendiniz indirin: docker pull {IMAGE}'
+def image_missing(rc,output):
+ """docker run --pull=never exits 125 when the image is absent."""
+ text=output or ''
+ return rc==125 and ('No such image' in text or 'Unable to find image' in text)
 AUTO_SCOPE=EXTENSIONS+'/*.py'
 VERIFY_TIMEOUT=180  # whole container run incl. the repository suite (~30 s on the host)
 REPORT_LIMIT=4000
@@ -51,6 +59,12 @@ def safe_target(name):
  else:raise ValueError(refused+scope)
  if base in PROTECTED or base.lower() in PROTECTED:raise ValueError(refused+' (korunan güvenlik dosyası)')
  if base.lower().startswith('test'):raise ValueError(refused+' (test dosyaları korunur)')
+ stem=base[:-3]
+ # '__init__.py'/'__main__.py' would run on package import / unittest discovery; '_x' names are private.
+ if stem.startswith('_'):raise ValueError(refused+' (alt çizgiyle başlayan modül adı)')
+ # A module named like the standard library (json.py, os.py) would shadow it for every importer.
+ if stem.lower() in sys.stdlib_module_names:raise ValueError(refused+' (standart kütüphane modülüyle aynı ad)')
+ if m and not _EXT_NAME.fullmatch(base):raise ValueError(refused+' (extensions adları küçük harf olmalı: [a-z][a-z0-9_]*.py)')
  root=ROOT.resolve()
  if m:
   folder=ROOT/EXTENSIONS;parent=root/EXTENSIONS
@@ -241,7 +255,7 @@ def stage_sources(dest,target,raw):
   if needs_host_program(p.read_text(encoding='utf-8',errors='replace')):p.unlink();excluded.append(p.name)
  return excluded
 def docker_command(name,src):
- return ['docker','run','--rm','--name',name,'-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={src},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=256m','python:3.12-slim','python','-I','-c',VERIFY_SCRIPT]
+ return ['docker','run','--pull=never','--rm','--name',name,'-i','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory','512m','--memory-swap','512m','--cpus','1','--user','65534:65534','--mount',f'type=bind,src={src},dst=/work,readonly','--tmpfs','/tmp:rw,noexec,nosuid,size=256m',IMAGE,'python','-I','-c',VERIFY_SCRIPT]
 class OutputLimitExceeded(Exception):
  pass
 def _container_run(cmd,input='',timeout=VERIFY_TIMEOUT,expect=()):
@@ -364,6 +378,8 @@ def verify(uid,_raw=None):
     seen=set(proc.seen) if isinstance(getattr(proc,'seen',None),(set,frozenset)) else set()
     seen|={line.strip() for line in out.splitlines()}
     proof={k:sentinel[k] in seen for k,_ in _STAGE_BITS}
+    if image_missing(rc,out):
+     return finish(False,_report(IMAGE_MISSING,_stage_lines(ran,'NOT RUN'),extra))
     if rc==0 or 101<=rc<=107:
      bits=rc-100 if rc else 0
      state={k:('FAIL' if bits&bit else 'PASS' if proof[k] else 'FAIL (tamamlanma kanıtı yok)') for k,bit in _STAGE_BITS}

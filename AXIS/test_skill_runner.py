@@ -187,7 +187,9 @@ class SkillRunnerTests(unittest.TestCase):
         self.assertIsNone(result["error"])
         self.assertGreaterEqual(result["elapsed_s"], 0)
         command = self.docker.call_args.args[0]
-        self.assertEqual(command[:3], ["docker", "run", "--rm"])
+        self.assertEqual(command[:4], ["docker", "run", "--rm", "--pull=never"])
+        self.assertLess(command.index("--pull=never"), command.index(skill_runner.IMAGE))
+        self.assertEqual(skill_runner.IMAGE, "python:3.12-slim")
         self.assertIn("--read-only", command)
         for flag, value in (
             ("--network", "none"), ("--cap-drop", "ALL"),
@@ -328,6 +330,19 @@ class SkillRunnerTests(unittest.TestCase):
                          ['AXIS_RESULT test-marker {"ok": true, "output": 42}'])
         self.assertIn("import noise", result.stderr)
         self.assertIn("run noise", result.stderr)
+
+    def test_missing_image_is_blocked_not_pulled(self):
+        self.approve()
+        for text in ("docker: Error response from daemon: No such image: python:3.12-slim.",
+                     "Unable to find image 'python:3.12-slim' locally"):
+            with self.subTest(text=text):
+                self.docker.side_effect = lambda command, text=text: subprocess.CompletedProcess(
+                    command, 125, "", text)
+                result = skill_runner.run("demo", {})
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("docker pull python:3.12-slim", result["error"])
+                self.assertIn("internete çıkılmadı", result["error"])
+                self.assertIsNone(result["output"])
 
     def test_unsafe_mount_path_is_blocked(self):
         self.approve()

@@ -171,7 +171,13 @@ async function traceLoad(){
     const er=$('#traceErr');er.textContent='Görev izi yüklenemedi: '+e.message;er.hidden=false;
   }
 }
-function traceTick(){if(typeof currentTab!=='undefined'&&currentTab==='trace')return traceLoad()}
+/* Scheduler calls this every 5 s; poll only while the trace tab is visible and at most every 10 s. */
+let trPollAt=0;
+function traceTick(){
+  if(document.hidden||typeof currentTab==='undefined'||currentTab!=='trace')return;
+  const now=Date.now();if(now-trPollAt<10000)return;
+  trPollAt=now;return traceLoad();
+}
 
 /* ======================= 3. Runnable skills ======================= */
 const rs={sig:'',state:new Map(),nodes:new Map()};

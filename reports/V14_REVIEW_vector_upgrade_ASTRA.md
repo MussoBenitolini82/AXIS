@@ -1,3 +1,5 @@
+> Not (2026-11-11): Bu inceleme dosyanın daha eski bir sürümüne aittir; buradaki sha256 değerleri güncel kodla eşleşmiyor. Güncel kod bu sağlayıcı tarafından incelenmedi. Son bağımsız inceleme: Claude Opus 5.5, 2026-11-11 (yerel, salt-okunur).
+
 Reviewer: OpenAI Codex
 Model (from rollout): MODEL gpt-6-astra (parts 1-4)
 Rollout: rollout-2026-11-11T01-28-12-01a1c793-77e3-73c3-9959-7796d7dd0054.jsonl (part 1); rollout-2026-11-11T01-28-56-01a1c794-2178-7381-9a7f-9547cce3fcb8.jsonl (part 2); rollout-2026-11-11T01-29-34-01a1c794-b775-7383-a8c9-ff1f8cc3e830.jsonl (part 3); rollout-2026-11-11T01-30-08-01a1c795-3c5f-7a52-ae53-58b6fe0a37a4.jsonl (part 4)

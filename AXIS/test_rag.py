@@ -1,8 +1,8 @@
-"""RAG: FTS5 index, embedding store, hybrid fusion and cited answers (no network)."""
-import hashlib, io, json, math, sqlite3, tempfile, threading, unittest
+"""RAG: FTS5 index, axis_memory embeddings, hybrid fusion and cited answers (no network)."""
+import sqlite3, tempfile, unittest
 from pathlib import Path
 from unittest import mock
-import rag, rag_docs, rag_embed, rag_fts, server
+import axis_memory, rag, rag_docs, rag_fts, server
 import vector_intelligence as vi
 
 
@@ -12,14 +12,13 @@ def vector_db():
     return db
 
 
-def fake_embed(texts, model=None):
+def fake_embed(texts):
+    """Deterministic unit vectors, one axis per 'topic' keyword."""
+    axis_memory._state = True  # what a real successful embed records
     out = []
     for t in texts:
-        v = [0.0] * 8
-        for w in t.lower().split():
-            v[int(hashlib.md5(w.encode()).hexdigest(), 16) % 8] += 1.0
-        n = math.sqrt(sum(x * x for x in v))
-        out.append([x / n for x in v] if n else [1 / math.sqrt(8)] * 8)
+        t = str(t).lower()
+        out.append([1.0, 0.0, 0.0] if 'kuantum' in t or 'quantum' in t else [0.0, 1.0, 0.0] if 'protein' in t else [0.0, 0.0, 1.0])
     return out
 
 
@@ -73,85 +72,6 @@ class FtsTests(TmpDir):
         self.assertLessEqual(len(rag_fts.search(self.f, 'graph', 10 ** 6)), 100)
 
 
-class EmbedTests(TmpDir):
-    def setUp(self):
-        super().setUp()
-        self.v = vector_db()
-        self.s = self.conn(rag_embed.open_store)
-        for i, t in enumerate(['graph neural networks', 'protein folding', 'reinforcement learning games']):
-            self.v.execute('INSERT INTO sources VALUES (?,?,?,?,?,?,?)', (f'S{i}', t, 'u', None, 2020, t + ' abstract', 'x'))
-
-    def test_sync_lifecycle(self):
-        self.assertEqual(rag_embed.sync(self.v, self.s, embed_fn=fake_embed)['embedded'], 3)
-        self.assertEqual(rag_embed.sync(self.v, self.s, embed_fn=fake_embed), {'embedded': 0, 'skipped': 3, 'removed': 0})
-        self.v.execute("UPDATE sources SET abstract='new' WHERE id='S1'")
-        self.v.execute("DELETE FROM sources WHERE id='S2'")
-        self.assertEqual(rag_embed.sync(self.v, self.s, embed_fn=fake_embed), {'embedded': 1, 'skipped': 1, 'removed': 1})
-        self.assertEqual(rag_embed.sync(self.v, self.s, model='other', embed_fn=fake_embed)['embedded'], 2)
-
-    def test_max_docs_and_stop(self):
-        self.assertEqual(rag_embed.sync(self.v, self.s, max_docs=1, embed_fn=fake_embed)['embedded'], 1)
-        ev = threading.Event()
-        ev.set()
-        self.assertEqual(rag_embed.sync(self.v, self.s, stop=ev, embed_fn=fake_embed)['embedded'], 0)
-
-    def test_search_best_first_and_model_filter(self):
-        rag_embed.sync(self.v, self.s, embed_fn=fake_embed)
-        rag_embed.sync(self.v, self.s, model='other', embed_fn=fake_embed)
-        # one vector per document: switching model replaces the old vectors
-        hits = rag_embed.search(self.s, 'protein folding\nprotein folding abstract', model='other', embed_fn=fake_embed)
-        self.assertEqual(hits[0]['doc_id'], 'src:S1')
-        self.assertEqual(len(hits), 3)
-        self.assertEqual(rag_embed.search(self.s, 'protein folding', embed_fn=fake_embed), [])  # stale model ignored
-
-    def test_pack_roundtrip(self):
-        self.assertEqual(list(rag_embed.unpack(rag_embed.pack([0.5, -1.0, 2.0]))), [0.5, -1.0, 2.0])
-
-
-class FakeResp(io.BytesIO):
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        self.close()
-
-
-class EmbedHttpTests(unittest.TestCase):
-    def call(self, payload, texts=('a', 'b')):
-        seen = []
-
-        def opener(req, timeout):
-            seen.append(req)
-            return FakeResp(json.dumps(payload).encode())
-        with mock.patch.object(rag_embed.local_models, 'open_local', opener), \
-                mock.patch.object(rag_embed.local_models, 'ensure_local') as ens, \
-                mock.patch.object(rag_embed, '_CHECKED', set()):
-            out = rag_embed.embed(list(texts), 'm1')
-            rag_embed.embed(list(texts), 'm1')
-        return out, seen, ens
-
-    def test_ok_normalised_and_local(self):
-        out, seen, ens = self.call({'embeddings': [[3, 4], [0, 2]]})
-        self.assertEqual(out, [[0.6, 0.8], [0.0, 1.0]])
-        self.assertEqual(seen[0].full_url, 'http://127.0.0.1:11434/api/embed')
-        self.assertIs(json.loads(seen[0].data)['truncate'], True)
-        ens.assert_called_once_with('m1')
-
-    def test_bad_responses(self):
-        for bad in [{'embeddings': [[1, 2]]}, {'embeddings': [[1, float('nan')], [1, 2]]},
-                    {'embeddings': [[True, 1], [1, 2]]}, {'embeddings': [[1, 2], [1, 2, 3]]},
-                    {'embeddings': [[0, 0], [1, 2]]}, {}, []]:
-            with self.assertRaises(ValueError, msg=str(bad)):
-                self.call(bad)
-
-    def test_cloud_model_refused_before_request(self):
-        with mock.patch.object(rag_embed, '_CHECKED', set()), \
-                mock.patch.object(rag_embed.local_models, 'open_local') as op:
-            with self.assertRaises(rag_embed.local_models.CloudModelError):
-                rag_embed.embed(['x'], 'bge-m3:cloud')
-            op.assert_not_called()
-
-
 class HybridTests(unittest.TestCase):
     def setUp(self):
         t = tempfile.TemporaryDirectory()
@@ -196,6 +116,7 @@ class HybridTests(unittest.TestCase):
         self.assertIsNone(r['sources'][1]['url'])  # non-http URL never reaches the UI
         self.assertEqual(r['retrieval']['mode'], 'hibrit')
         self.assertFalse(r['general_knowledge'])
+        self.assertTrue(r['semantic'])
         user = seen[0][1]['content']
         self.assertIn('"no": 1', user)
         self.assertIn('‹b›proteins‹/b›', user)
@@ -206,6 +127,89 @@ class HybridTests(unittest.TestCase):
                 mock.patch.object(rag, 'retrieve', side_effect=sqlite3.OperationalError('x')):
             r = vi.answer_question('pruning deep networks')
         self.assertEqual(r['retrieval']['mode'], 'anahtar kelime')
+        self.assertFalse(r['semantic'])
+
+    def test_indexing_off_never_calls_axis_memory(self):
+        with mock.patch.object(axis_memory, 'semantic_search') as ss:
+            docs, info = rag.retrieve('pruning', 6)
+        ss.assert_not_called()
+        self.assertEqual((info['semantic_hits'], info['semantic_note']), (0, 'anlamsal dizin kapalı'))
+        self.assertFalse(docs[0]['semantic'])
+
+
+class MemoryRetrievalTests(unittest.TestCase):
+    """rag.retrieve reads embeddings from axis_memory only: one store, one query embedding per question."""
+    def setUp(self):
+        t = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(t.cleanup)
+        d = Path(t.name)
+        for mod, name, val in ((server, 'DB', d / 'vector.db'), (axis_memory, 'DB', d / 'memory.sqlite3'),
+                               (server, 'MEMORY_INDEXING', True)):
+            p = mock.patch.object(mod, name, val)
+            p.start()
+            self.addCleanup(p.stop)
+        p = mock.patch.object(axis_memory, 'embed', side_effect=fake_embed)
+        self.embed = p.start()
+        self.addCleanup(p.stop)
+        axis_memory.reset_availability()
+        self.addCleanup(axis_memory.reset_availability)
+        with server.connect() as db:
+            db.execute("INSERT INTO sources VALUES ('W1','Quantum error correction','https://x/q',NULL,2023,'Surface codes for quantum computers.','x')")
+            self.paper = server.add_node(db, 'Quantum error correction', 'paper', 'Surface codes')
+            db.execute('INSERT INTO evidence VALUES (?,?,?)', (self.paper, 'W1', 'q'))
+            self.concept = server.add_node(db, 'Protein katlanması', 'concept', 'protein yapısı')
+            self.topic = server.add_node(db, 'Dolanıklık', 'topic', 'kuantum dolanıklık olgusu')
+            db.commit()
+        axis_memory.upsert('chunk:abc:0', 'chunk', 'Kitap.pdf · bölüm 1', 'Kuantum <b>dolanıklık</b> ' + 'k' * 800)
+        self.assertEqual(server.memory_sync_once()['pending'], 0)
+        self.embed.reset_mock()
+
+    def test_retrieve_maps_node_paper_and_chunk_hits(self):
+        docs, info = rag.retrieve('kuantum', 6)  # Turkish query: no full-text hit on the English paper
+        by = {d['doc_id']: d for d in docs}
+        self.assertEqual(set(by), {'src:W1', 'node:' + self.topic, 'chunk:chunk:abc:0'})  # the protein concept is below the threshold
+        self.assertEqual((by['src:W1']['node_id'], by['src:W1']['url'], by['src:W1']['year']), (self.paper, 'https://x/q', 2023))
+        chunk = by['chunk:chunk:abc:0']
+        self.assertEqual((chunk['kind'], chunk['node_id'], chunk['title']), ('chunk', None, 'Kitap.pdf · bölüm 1'))
+        self.assertTrue(chunk['text'].startswith('Kuantum <b>dolanıklık</b>'))
+        self.assertTrue(all(d['semantic'] for d in docs))
+        self.assertEqual((info['semantic_hits'], info['semantic_note']), (3, None))
+        self.assertIn(info['mode'], ('hibrit', 'anlamsal'))
+
+    def test_paper_found_by_all_three_lists_is_one_document(self):
+        docs, _ = rag.retrieve('quantum', 6, extra=[{'doc_id': 'node:' + self.paper}])
+        self.assertEqual(docs[0]['doc_id'], 'src:W1')  # full-text (source) + keyword (node) + embedding (node) add up
+        self.assertEqual([d['node_id'] for d in docs].count(self.paper), 1)
+
+    def test_one_question_embeds_the_query_exactly_once(self):
+        seen = []
+        with mock.patch.object(vi, 'ask', side_effect=lambda m, t=0.2: seen.append(m) or 'Yanıt [1].'):
+            r = vi.answer_question('Kuantum dolanıklık nedir?')
+        self.assertEqual(self.embed.call_count, 1)
+        self.assertEqual(self.embed.call_args.args[0], ['Kuantum dolanıklık nedir?'])
+        self.assertTrue(r['semantic'])
+        self.assertIn('chunk:abc:0', [m['id'] for m in r['used_memory']])
+        self.assertIn(self.paper, [m['id'] for m in r['used_memory']])
+        paper = next(s for s in r['sources'] if s['node_id'] == self.paper)
+        self.assertEqual((paper['url'], paper['year']), ('https://x/q', 2023))
+        user = seen[0][1]['content']
+        self.assertIn('Kuantum ‹b›dolanıklık‹/b›', user)  # chunk text is numbered, neutralised …
+        self.assertNotIn('k' * 701, user)                  # … and capped
+        self.assertEqual([s['no'] for s in r['sources']], list(range(1, len(r['sources']) + 1)))
+
+    def test_embedding_outage_degrades_to_full_text(self):
+        self.embed.side_effect = None
+        self.embed.return_value = None
+        docs, info = rag.retrieve('quantum', 6)
+        self.assertEqual((info['mode'], info['semantic_hits']), ('tam metin', 0))
+        self.assertEqual(docs[0]['doc_id'], 'src:W1')
+
+    def test_status_counts_come_from_axis_memory_and_fts(self):
+        rag.sync_fts()
+        s = rag.status()
+        self.assertEqual((s['embedded_docs'], s['memory_items'], s['pending'], s['fts_docs']), (4, 4, 0, 3))
+        self.assertEqual((s['embed_model'], s['store'], s['running'], s['last_error']), (axis_memory.EMBED_MODEL, 'memory.sqlite3', False, None))
+        self.assertNotIn('error', s)
 
 
 if __name__ == '__main__':
