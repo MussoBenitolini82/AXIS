@@ -9,7 +9,7 @@ from pathlib import Path
 DB=Path(os.getenv('VECTOR_BRAIN_DB',str(Path(__file__).with_name('central_brain.sqlite3'))))
 LOCK=threading.RLock()
 ROLES={'research','planner','coder','reviewer','tester','visual','orchestrator','system','assistant','auto_upgrade'}
-TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_research','agent_scan','agent_run','graph','neural_view','pdf_ingest','local_llm','core_upgrade'}
+TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_research','agent_scan','agent_run','graph','neural_view','pdf_ingest','local_llm','core_upgrade','skill_run'}
 
 def now():return datetime.now(timezone.utc).isoformat()
 def _setup(db):

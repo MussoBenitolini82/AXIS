@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-import central_brain, self_evolution, server, vector_agents, vector_intelligence, vector_upgrade
+import axis_feedback, axis_learning, axis_memory, central_brain, self_evolution, server, vector_agents, vector_intelligence, vector_upgrade
 
 
 class Isolated(unittest.TestCase):
@@ -16,6 +16,8 @@ class Isolated(unittest.TestCase):
         for p in (root, specs, *dirs.values()): p.mkdir()
         for mod, name, val in (
                 (server, 'DB', d / 'vector.db'), (central_brain, 'DB', d / 'brain.sqlite3'),
+                (axis_learning, 'DB', d / 'learning.sqlite3'), (axis_memory, 'DB', d / 'memory.sqlite3'),
+                (axis_feedback, 'DB', d / 'feedback.sqlite3'),
                 (vector_upgrade, 'DATA', d), (vector_upgrade, 'DB', d / 'upgrades.sqlite3'),
                 (vector_upgrade, 'TESTS', specs), (vector_upgrade, 'ROOT', root),
                 (vector_agents, 'ROOT', root), (vector_agents, 'DB', d / 'agents.sqlite3'),
@@ -127,15 +129,26 @@ class UpgradeTests(Isolated):
         cases = json.dumps([{'function': 'run', 'args': [1], 'expected': 1}])
         with patch.object(vector_upgrade, 'SCHEDULER', scheduler), \
                 patch.object(vector_agents, 'llm', side_effect=['Plan', 'def run(x): return x', 'VERDICT: PASS\nok', cases]):
-            r = vector_agents.run('Saf hesaplama becerisi oluştur ve öner', 'research_extensions.py')
+            r = vector_agents.run('Saf hesaplama becerisi oluştur ve öner', 'extensions/research_extensions.py')
         self.assertEqual(r['status'], 'awaiting_tests_and_approval')
         self.assertEqual(seen, [True])   # queued exactly once, with the cases already on disk
+
+    def test_agent_proposal_for_top_level_target_is_never_queued(self):
+        seen = []
+        cases = json.dumps([{'function': 'run', 'args': [1], 'expected': 1}])
+        with patch.object(vector_upgrade, 'SCHEDULER', seen.append), \
+                patch.object(vector_agents, 'llm', side_effect=['Plan', 'def run(x): return x', 'VERDICT: PASS\nok', cases]):
+            r = vector_agents.run('Saf hesaplama becerisi oluştur ve öner', 'research_extensions.py')
+        self.assertEqual(r['status'], 'awaiting_tests_and_approval')
+        self.assertEqual(r['proposal']['status'], 'pending')
+        self.assertFalse(r['proposal']['auto_eligible'])
+        self.assertEqual(seen, [])   # manual-only: needs decide(..., 'ONAYLIYORUM')
 
     def test_agent_proposal_is_still_queued_when_test_design_fails(self):
         seen = []
         with patch.object(vector_upgrade, 'SCHEDULER', seen.append), \
                 patch.object(vector_agents, 'llm', side_effect=['Plan', 'def run(x): return x', 'VERDICT: PASS\nok', OSError('ollama yok')]):
-            r = vector_agents.run('Saf hesaplama becerisi oluştur ve öner', 'research_extensions.py')
+            r = vector_agents.run('Saf hesaplama becerisi oluştur ve öner', 'extensions/research_extensions.py')
         self.assertEqual(r['status'], 'awaiting_tests_and_approval')
         self.assertEqual(seen, [r['proposal_id']])
 

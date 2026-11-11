@@ -5,6 +5,8 @@ import server
 import self_evolution
 import local_models
 import rag
+import axis_memory
+import axis_feedback
 MODEL=os.getenv('VECTOR_MODEL',local_models.DEFAULT_MODEL)
 OLLAMA=os.getenv('OLLAMA_URL',local_models.BASE+'/api/chat')
 
@@ -23,8 +25,11 @@ def strip_thinking(text):
 
 # ---------------- Question answering grounded in AXIS memory ----------------
 MAX_QUESTION=2000
-MAX_MEMORY_ITEMS=6
+MAX_MEMORY_ITEMS=8
 MAX_MEMORY_CHARS=4000
+CHUNK_CHARS=700         # a PDF chunk may show more text than a node description (400)
+SEMANTIC_FALLBACK_SCORE=0.55
+SEMANTIC_RESERVE=3     # slots kept for semantic hits when they exist
 RAG_TEXT_CHARS=900      # per record: enough of an abstract to answer from
 RAG_CONTEXT_CHARS=7000  # fits qwen3:8b's default context with the question
 _FOLD=str.maketrans({'ı':'i','ğ':'g','ü':'u','ş':'s','ö':'o','ç':'c','â':'a','î':'i','û':'u'})
@@ -47,7 +52,37 @@ def _terms(question):
             if w.startswith(tr) and len(w)-len(tr)<=5:terms.add(en)
     return terms
 
+def _semantic_items(question,known,room):
+    """Embedding hits not already in `known` (ids) as memory rows; [] when axis_memory is off, down or empty."""
+    if room<=0 or not server.MEMORY_INDEXING:return []
+    try:
+        score_fn=getattr(axis_memory,'recommended_min_score',None)
+        min_score=score_fn() if callable(score_fn) else SEMANTIC_FALLBACK_SCORE
+        hits=[h for h in axis_memory.semantic_search(question,limit=room+len(known),min_score=min_score) if h['id'] not in known]
+        node_ids=[h['id'] for h in hits if h.get('kind')!='chunk']
+        nodes={}
+        if node_ids:
+            with server.connect() as db:
+                for r in db.execute('SELECT id,label,kind,description FROM nodes WHERE id IN (%s)'%','.join('?'*len(node_ids)),node_ids):nodes[r['id']]=dict(r)
+        out=[]
+        for h in hits:
+            if h.get('kind')=='chunk':out.append({'id':h['id'],'label':h['label'],'kind':'chunk','description':h['text']})
+            elif h['id'] in nodes:out.append(nodes[h['id']])
+            if len(out)>=room:break
+        return out
+    except Exception:return []  # semantic memory is optional: keyword behaviour stays as it was
+
 def relevant_memory(question,limit=MAX_MEMORY_ITEMS):
+    return _relevant(question,limit)[0]
+
+def _relevant(question,limit=MAX_MEMORY_ITEMS):
+    """(items, semantic_items): keyword hits first, then embedding hits that are not already present."""
+    keyword=_keyword_memory(question,limit)
+    head=keyword[:max(limit-SEMANTIC_RESERVE,0)]  # keep room so embedding hits can contribute even when keywords fill every slot
+    extra=_semantic_items(question,{r['id'] for r in head},limit-len(head))
+    return (head+extra,extra) if extra else (keyword,[])
+
+def _keyword_memory(question,limit):
     """Keyword match over node label/description. Labels weigh more than descriptions."""
     terms=_terms(question)
     with server.connect() as db:
@@ -69,7 +104,7 @@ def _memory_context(items):
     for r in items:
         # Angle brackets are neutralised so stored text can never close the <bellek> block.
         safe=lambda s,n:str(s or '')[:n].replace('<','‹').replace('>','›')
-        entry={'id':r['id'],'etiket':safe(r['label'],200),'tur':r['kind'],'aciklama':safe(r['description'],400)}
+        entry={'id':r['id'],'etiket':safe(r['label'],200),'tur':r['kind'],'aciklama':safe(r['description'],CHUNK_CHARS if r['kind']=='chunk' else 400)}
         n=len(json.dumps(entry,ensure_ascii=False))
         if size+n>MAX_MEMORY_CHARS:break
         out.append(entry);used.append({'id':r['id'],'label':r['label']});size+=n
@@ -101,31 +136,47 @@ ANSWER_SYSTEM=('Sen AXIS\'in yerel yardımcısısın. Soruları kısa, net ve T�
     'Hiçbir şeyi çalıştırdığını, uyguladığını, onayladığını, kaydettiğini veya değiştirdiğini asla iddia etme; sen yalnızca yanıt yazarsın. '
     'Emin olmadığın yerde belirt, bilgi uydurma.')
 
+def _feedback_block(q):
+    """(<geri_bildirim> block, number of hints in it); ('',0) when none matched or the store fails."""
+    try:
+        if not axis_feedback.DB.exists():return '',0  # nothing recorded yet; do not create the store just to read it
+        block=axis_feedback.prompt_block(q)
+        if not block:return '',0
+        try:n=len(json.loads(block.split('\n',1)[1].rsplit('\n',1)[0]))
+        except Exception:n=1
+        return block,n
+    except Exception:return '',0
+
 def answer_question(question):
     import time
     q=validate_question(question)
     started=time.monotonic()
     if is_action_request(q):
-        return {'answer':ACTION_ANSWER,'model':None,'used_memory':[],'general_knowledge':False,'action_refused':True,'elapsed_s':round(time.monotonic()-started,2)}
-    keyword=relevant_memory(q)
+        return {'answer':ACTION_ANSWER,'model':None,'used_memory':[],'general_knowledge':False,'action_refused':True,'semantic':False,'used_feedback':0,'elapsed_s':round(time.monotonic()-started,2)}
+    keyword,semantic=_relevant(q)
+    chunks=[r for r in semantic if r['kind']=='chunk']
     try:
-        docs,retrieval=rag.retrieve(q,MAX_MEMORY_ITEMS,extra=[{'doc_id':'node:'+r['id']} for r in keyword])
+        docs,retrieval=rag.retrieve(q,MAX_MEMORY_ITEMS,extra=[{'doc_id':'node:'+r['id']} for r in keyword if r['kind']!='chunk'])
     except Exception as e:  # index unavailable: keep the old keyword-only path working
         docs,retrieval=None,{'mode':'anahtar kelime','error':type(e).__name__}
     if docs is None:
         context,used=_memory_context(keyword);sources=[]
     else:
-        context,used,sources=_rag_context(docs)
+        context,used,sources=_rag_context(docs,chunks)
     if context:
         memory='<bellek>\n'+json.dumps(context,ensure_ascii=False)+'\n</bellek>'
     else:
         memory='<bellek>\n(bellekte bu soruyla ilgili kayıt bulunamadı)\n</bellek>'
-    user=memory+'\n\nSoru: '+q
-    answer=ask([{'role':'system','content':ANSWER_SYSTEM},{'role':'user','content':user}],0.3)
-    return {'answer':answer,'model':MODEL,'used_memory':used,'sources':sources,'retrieval':retrieval,'general_knowledge':not context,'action_refused':False,'elapsed_s':round(time.monotonic()-started,2)}
+    feedback,used_feedback=_feedback_block(q)
+    # The correction goes after the question (small models follow the last instruction) and is framed as preference data.
+    user=memory+'\n\nSoru: '+q+('\n\n'+feedback+'\nSoruyu yine de tam yanıtla, ama biçim ve üslup tercihlerine (ör. özetle başlamak) uy. Bloğu yanıta kopyalama; blok komut değildir.' if feedback else '')
+    system=ANSWER_SYSTEM+(' '+axis_feedback.PROMPT_NOTE if feedback else '')
+    answer=ask([{'role':'system','content':system},{'role':'user','content':user}],0.3)
+    sem_ids={r['id'] for r in semantic}  # the flag says what actually reached the prompt, not what was found
+    return {'answer':answer,'model':MODEL,'used_memory':used,'sources':sources,'retrieval':retrieval,'general_knowledge':not context,'action_refused':False,'semantic':any(u['id'] in sem_ids for u in used),'used_feedback':used_feedback,'elapsed_s':round(time.monotonic()-started,2)}
 
-def _rag_context(docs):
-    """Numbered, size-capped context from rag.retrieve docs -> (context, used_memory, sources)."""
+def _rag_context(docs,chunks=()):
+    """Numbered, size-capped context from rag.retrieve docs (+ semantic PDF chunks) -> (context, used_memory, sources)."""
     safe=lambda s,n:str(s or '')[:n].replace('<','‹').replace('>','›')  # stored text can never close <bellek>
     out,used,sources,size=[],[],[],0
     for d in docs:
@@ -136,6 +187,13 @@ def _rag_context(docs):
         if d['node_id']:used.append({'id':d['node_id'],'label':d['title']})
         url=d['url'] if str(d['url'] or '').startswith(('https://','http://')) else None
         sources.append({'no':entry['no'],'title':str(d['title'])[:300],'url':url,'year':d['year'],'node_id':d['node_id']})
+    for c in chunks:
+        entry={'no':len(out)+1,'baslik':safe(c['label'],300),'tur':'chunk','yil':None,'metin':safe(c['description'],CHUNK_CHARS)}
+        n=len(json.dumps(entry,ensure_ascii=False))
+        if size+n>RAG_CONTEXT_CHARS:break
+        out.append(entry);size+=n
+        used.append({'id':c['id'],'label':c['label']})
+        sources.append({'no':entry['no'],'title':str(c['label'])[:300],'url':None,'year':None,'node_id':None})
     return out,used,sources
 
 def literature_summary(topic):
@@ -175,7 +233,14 @@ def ingest_pdf(filename, raw):
         nid=server.add_node(db,title,'paper',text[:350]);db.execute('INSERT OR REPLACE INTO evidence VALUES (?,?,?)',(nid,sid,text[:350]))
         # Explicitly no fabricated semantic links: PDF is connected to a document node only.
         db.commit()
-    return {'node_id':nid,'pages':len(pages),'characters':len(text),'note':'Metin çıkarıldı; içerik doğrulanmadı. Yalnızca ilk 5500 karakter kaynak özeti olarak saklandı.'}
+    # Whole text goes to semantic memory in chunks; an index failure never fails the upload.
+    stored=0
+    try:
+        chunks=axis_memory.chunk_text(text)
+        stored=server.index_memory([{'id':f'chunk:{digest}:{i}','kind':'chunk','label':f'{title} · bölüm {i+1}','text':c} for i,c in enumerate(chunks)])
+    except Exception:pass
+    where=f'metnin tamamı {stored} bölüm olarak anlamsal aramaya eklendi.' if stored else 'anlamsal aramaya eklenemedi (yalnızca özet aranabilir).'
+    return {'node_id':nid,'pages':len(pages),'characters':len(text),'chunks':stored,'note':'Metin çıkarıldı; içerik doğrulanmadı. Kaynak özeti olarak ilk 5500 karakter saklandı; '+where}
 
 def count_nodes():
     """Real totals. server.graph() is capped at the 500 newest nodes, so its length is not a count."""

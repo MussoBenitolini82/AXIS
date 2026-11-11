@@ -74,3 +74,8 @@ def decide(pid,action,confirmation):
   c.execute('UPDATE proposals SET status=? WHERE id=?',('approved' if action=='approve' else 'rejected',pid))
   staged.unlink(missing_ok=True)
   return {'id':pid,'status':'approved' if action=='approve' else 'rejected','note':'Beceri dosyası kaydedildi; otomatik çalıştırılmadı.'}
+def approved_digest(skill):
+ """Newest approved proposal for this skill as (sha256, created), or None. Used by skill_runner."""
+ skill=valid_name(skill)
+ with LOCK,db() as c:r=c.execute("SELECT sha256,created FROM proposals WHERE skill=? AND status='approved' ORDER BY created DESC LIMIT 1",(skill,)).fetchone()
+ return (r['sha256'],r['created']) if r else None

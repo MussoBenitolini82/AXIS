@@ -9,6 +9,9 @@ import self_evolution as evolution
 import vector_upgrade as upgrades
 import neural_view
 import vector_agents
+import axis_memory
+import axis_feedback
+import axis_trace as trace
 """VECTOR Brain V2: local-first research and source-linked knowledge graph."""
 import json, os, re, sqlite3, threading, urllib.error, urllib.parse, urllib.request, uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -122,22 +125,48 @@ def find_works(topic,limit):
     except Exception as e:
         raise RuntimeError(first+'; arXiv de başarısız: '+friendly_error(e,'arXiv')) from None
 
+class _SafeSpan:
+    """Best-effort tracing: a failure while opening, annotating or closing a span never changes the traced block's result or exception."""
+    def __init__(self,*a):self.a=a;self.cm=None;self.sp=None
+    def __enter__(self):
+        try:self.cm=trace.span(*self.a);self.sp=self.cm.__enter__()
+        except Exception:self.cm=self.sp=None
+        return self
+    def note(self,k,v):
+        try:self.sp.note(k,v)
+        except Exception:pass
+    def partial(self):
+        try:self.sp.partial()
+        except Exception:pass
+    def __exit__(self,t,v,tb):
+        if self.cm is not None:
+            try:self.cm.__exit__(t,v,tb)
+            except Exception:pass  # the original exception (if any) propagates because we return False
+        return False
+
+def safe_span(*a): return _SafeSpan(*a)
+
 def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
     try:
-        works,source,note=find_works(topic,limit)
-        with LOCK,connect() as db:
-            root=add_node(db,topic,'topic','Araştırma konusu; kaynaklardan otomatik oluşturuldu')
-            for w in works:
-                sid=w['id']
-                db.execute('INSERT OR REPLACE INTO sources VALUES (?,?,?,?,?,?,?)',(sid,w['title'],w['url'],w['doi'],w['year'],w['abstract'],now()))
-                paper=add_node(db,w['title'],'paper',w['abstract'][:350])
-                link(db,root,paper,'literatür')
-                db.execute('INSERT OR REPLACE INTO evidence VALUES (?,?,?)',(paper,sid,w['abstract'][:350]))
-                for concept in w['concepts']:
-                    c=add_node(db,concept,'concept',source+' tarafından etiketlenen kavram; doğrulanmış çıkarım değildir')
-                    link(db,paper,c,'etiket')
-            db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{source}: {limit} kayıt istendi · {len(works)} akademik kayıt işlendi'+(f' · {note}' if note else ''),job_id))
-            db.commit()
+        with safe_span(job_id,'research','literature_search') as sp:
+            works,source,note=find_works(topic,limit)
+            sp.note('source',source);sp.note('records',len(works))
+            if not works: sp.partial()
+            with LOCK,connect() as db:
+                root=add_node(db,topic,'topic','Araştırma konusu; kaynaklardan otomatik oluşturuldu')
+                to_index=[{'id':root,'kind':'topic','label':topic,'text':'Araştırma konusu; kaynaklardan otomatik oluşturuldu'}]
+                for w in works:
+                    sid=w['id']
+                    db.execute('INSERT OR REPLACE INTO sources VALUES (?,?,?,?,?,?,?)',(sid,w['title'],w['url'],w['doi'],w['year'],w['abstract'],now()))
+                    paper=add_node(db,w['title'],'paper',w['abstract'][:350])
+                    to_index.append({'id':paper,'kind':'paper','label':w['title'],'text':w['abstract']})
+                    link(db,root,paper,'literatür')
+                    db.execute('INSERT OR REPLACE INTO evidence VALUES (?,?,?)',(paper,sid,w['abstract'][:350]))
+                    for concept in w['concepts']:
+                        c=add_node(db,concept,'concept',source+' tarafından etiketlenen kavram; doğrulanmış çıkarım değildir')
+                        link(db,paper,c,'etiket')
+                db.execute('UPDATE jobs SET status=?,details=? WHERE id=?',('completed',f'{source}: {limit} kayıt istendi · {len(works)} akademik kayıt işlendi'+(f' · {note}' if note else ''),job_id))
+                db.commit()
     except Exception as e:
         # Mark the job first: a failing audit log must never leave it "running" forever.
         reason=(str(e) or type(e).__name__)
@@ -146,7 +175,8 @@ def research(topic,job_id,limit=RESEARCH_DEFAULT_LIMIT):
         try:brain.log('research','literature_search','research','failure',reason[:1000],job_id)
         except Exception:pass
         return
-    # The job is already committed as completed; the audit log is best-effort.
+    # The job is already committed as completed; the semantic index and the audit log are best-effort.
+    index_memory(to_index)
     try:brain.log('research',source.lower()+'_search','research','success' if works else 'partial',f'{topic}: {len(works)} akademik kayıt ({source})',job_id,{'source_ids':[w['id'] for w in works]})
     except Exception:pass
     if AFTER_RESEARCH: AFTER_RESEARCH()  # running server only: embed new abstracts in the background
@@ -159,6 +189,57 @@ def fail_stale_jobs():
     return n
 
 AFTER_RESEARCH=None  # set in __main__; tests and imports never start background embedding
+
+# ---------------- Semantic memory index (axis_memory) ----------------
+MEMORY_INDEXING=False  # switched on in __main__: imports and tests must never write to the real index
+MEMORY_BATCH=64
+MEMORY_MAX_BATCHES=200
+_MEM_WAKE=threading.Event()
+_MEM_THREAD=[None]
+_MEM_STOP=threading.Event()
+
+def index_memory(items):
+    """Upsert items into axis_memory and wake the worker; returns how many were stored (0 when off or failed). Never raises."""
+    if not MEMORY_INDEXING or not items: return 0
+    try: axis_memory.upsert_many(items)
+    except Exception: return 0
+    _MEM_WAKE.set()
+    return len(items)
+
+def memory_sync_once():
+    """One pass: graph nodes -> axis_memory rows, then embed what is pending in bounded batches."""
+    with LOCK,connect() as db:
+        rows=[dict(x) for x in db.execute('SELECT n.id,n.kind,n.label,n.description,(SELECT s.abstract FROM evidence e JOIN sources s ON s.id=e.source_id WHERE e.node_id=n.id LIMIT 1) AS abstract FROM nodes n')]
+    # A paper's text is its abstract (the same text research indexes), so the two writers never flip the digest.
+    items=[{'id':r['id'],'kind':r['kind'],'label':r['label'],'text':(r['abstract'] if r['kind']=='paper' and r['abstract'] else r['description']) or ''} for r in rows]
+    synced=0
+    for i in range(0,len(items),500): synced+=axis_memory.upsert_many(items[i:i+500])
+    embedded=pending=0;available=None
+    for _ in range(MEMORY_MAX_BATCHES):
+        r=axis_memory.backfill(MEMORY_BATCH)
+        embedded+=r['embedded'];pending=r['pending'];available=r['available']
+        if not pending or not r['available'] or not r['embedded']: break
+    return {'synced':synced,'embedded':embedded,'pending':pending,'available':available}
+
+def _memory_worker():
+    while not _MEM_STOP.is_set():
+        try: memory_sync_once()
+        except Exception: pass
+        _MEM_WAKE.wait(600);_MEM_WAKE.clear()  # nudged after research/PDF; otherwise retry every 10 min
+
+def start_memory_worker():
+    """One daemon thread (not POOL, never blocks start-up) that keeps axis_memory in step with the graph."""
+    t=_MEM_THREAD[0]
+    if t and t.is_alive(): return False
+    _MEM_STOP.clear()
+    _MEM_THREAD[0]=threading.Thread(target=_memory_worker,daemon=True,name='axis-memory-index')
+    _MEM_THREAD[0].start()
+    return True
+
+def stop_memory_worker(timeout=5):
+    _MEM_STOP.set();_MEM_WAKE.set()
+    t=_MEM_THREAD[0]
+    if t: t.join(timeout)
 
 def start_rag_embedding():
     try:
@@ -197,7 +278,9 @@ def ask_error_message(e):
 def run_ask(question,job_id):
     import vector_intelligence as vi
     try:
-        result=vi.answer_question(question)
+        with safe_span(job_id,'assistant','answer_question',vi.MODEL) as sp:
+            result=vi.answer_question(question)
+            sp.note('memory',len(result.get('used_memory') or ()));sp.note('semantic',result.get('semantic',False));sp.note('feedback',result.get('used_feedback',0))
         update={'status':'completed','error':None,**result}
         try:brain.log('assistant','answer_question','local_llm','success',('Soru yanıtlandı: '+question)[:500],job_id,{'used_memory':[m['id'] for m in result['used_memory']],'elapsed_s':result['elapsed_s']})
         except Exception:pass
@@ -285,13 +368,20 @@ class Handler(BaseHTTPRequestHandler):
     def route_get(self):
         p=urllib.parse.urlsplit(self.path)
         if p.path=='/': return self.send(200,(ROOT/'index.html').read_bytes(),'text/html')
-        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'auto_apply_upgrades':upgrades.auto_apply_enabled(),'features':['question_answering','literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate']})
+        if p.path=='/api/capabilities': return self.send(200,{'ollama_model':local_models.model_name(),'local_only':True,'auto_apply_upgrades':upgrades.auto_apply_enabled(),'embed_model':axis_memory.EMBED_MODEL,'features':['question_answering','literature_synthesis','llm_skill_proposal','parallel_readonly_tools','pdf_upload','approval_gate','semantic_memory','feedback_learning','task_trace','skill_run']})
         if p.path=='/api/neural':
             # http_response validates a/b and returns (400, error) instead of raising on bad input.
             return self.send(*neural_view.http_response(urllib.parse.parse_qs(p.query)))
         if p.path=='/api/ask-result':
             job=ask_result(urllib.parse.parse_qs(p.query).get('id',[''])[0])
             return self.send(200,job) if job else self.send(404,{'error':'Soru işi bulunamadı (sunucu yeniden başlatılmış olabilir)'})
+        if p.path=='/api/feedback-stats': return self.send(200,axis_feedback.stats())
+        if p.path=='/api/task-traces': return self.send(200,{'tasks':trace.tasks(int(urllib.parse.parse_qs(p.query).get('limit',['30'])[0])),'summary':trace.summary()})
+        if p.path=='/api/task-trace': return self.send(200,trace.trace(urllib.parse.parse_qs(p.query).get('id',[''])[0]))
+        if p.path=='/api/skills-runnable':
+            import skill_runner
+            return self.send(200,skill_runner.runnable())
+        if p.path=='/api/memory-status': return self.send(200,axis_memory.status())
         if p.path=='/api/upgrade-auto': return self.send(200,upgrades.auto_status())
         if p.path=='/api/agent-catalog': return self.send(200,discovery.listing())
         if p.path=='/api/agent-health': return self.send(200,discovery.health())
@@ -329,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403,{'error':'Cross-origin istek reddedildi'})
         if self.headers.get('Sec-Fetch-Site','')=='cross-site':
             return self.send(403,{'error':'Cross-site istek reddedildi'})
-        if self.path not in ('/api/research','/api/ask','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models'): return self.send(404,{'error':'Not found'})
+        if self.path not in ('/api/research','/api/ask','/api/propose','/api/decision','/api/synthesize','/api/generate-skill','/api/parallel','/api/pdf','/api/upgrade-propose','/api/upgrade-test','/api/upgrade-decision','/api/upgrade-rollback','/api/agent-run','/api/behavior-cases','/api/agent-scan','/api/agent-decision','/api/agent-parallel','/api/brain-log','/api/brain-propose','/api/brain-decision','/api/axis-run','/api/axis-record','/api/axis-learn','/api/axis-compose','/api/axis-recover','/api/axis-v13-develop','/api/axis-v13-repair','/api/axis-v13-models','/api/feedback','/api/skill-run','/api/memory-backfill'): return self.send(404,{'error':'Not found'})
         try:
             length=int(self.headers.get('Content-Length','0'))
             if length<0: raise ValueError('Geçersiz Content-Length')  # read(-1) would block until the client hangs up
@@ -337,8 +427,19 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict): raise ValueError('JSON nesnesi bekleniyor')
             if self.path=='/api/ask': return self.send(202,start_ask(data.get('question')))
-            if self.path=='/api/axis-v13-develop': return self.send(201,axis_v13.development(str(data.get('request','')),str(data.get('target','research_extensions.py'))))
-            if self.path=='/api/axis-v13-repair': return self.send(201,axis_v13.repair(str(data.get('error','')),str(data.get('target','research_extensions.py'))))
+            if self.path=='/api/axis-v13-develop': return self.send(201,axis_v13.development(str(data.get('request','')),str(data.get('target','extensions/research_extensions.py'))))
+            if self.path=='/api/axis-v13-repair': return self.send(201,axis_v13.repair(str(data.get('error','')),str(data.get('target','extensions/research_extensions.py'))))
+            if self.path=='/api/feedback':
+                jid=str(data.get('job_id',''))
+                job=ask_result(jid)
+                if not job: return self.send(404,{'error':'Soru işi bulunamadı (sunucu yeniden başlatılmış olabilir)'})
+                if job.get('status')!='completed' or job.get('action_refused') or not isinstance(job.get('answer'),str): raise ValueError('Yalnızca tamamlanmış bir yanıt için geri bildirim verilebilir')
+                # Question and answer come from the server's own record, never from the client.
+                return self.send(201,axis_feedback.record(jid,job['question'],job['answer'],data.get('rating'),data.get('correction','')))
+            if self.path=='/api/skill-run':
+                import skill_runner
+                return self.send(200,skill_runner.run(data.get('skill'),data.get('data')))
+            if self.path=='/api/memory-backfill': return self.send(200,axis_memory.backfill(64))
             if self.path=='/api/axis-v13-models': return self.send(200,axis_v13.model_suggestions(str(data.get('request',''))))
             if self.path=='/api/axis-record': return self.send(201,{'id':axis_learning.record(str(data.get('task_id','')),str(data.get('agent','')),str(data.get('kind','')),str(data.get('tool','')),str(data.get('outcome','')),data.get('payload',{}))})
             if self.path=='/api/axis-learn': return self.send(200,axis_learning.learn())
@@ -355,7 +456,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/agent-decision': return self.send(200,discovery.decision(str(data.get('id','')),str(data.get('action','')),str(data.get('confirmation',''))))
             if self.path=='/api/agent-parallel': return self.send(200,discovery.parallel_readonly(str(data.get('request',''))))
             if self.path=='/api/agent-run':
-                result=vector_agents.run(str(data.get('request','')),str(data.get('target','research_extensions.py')))
+                with safe_span(self._axis_task,'coder','agent_run') as sp:
+                    result=vector_agents.run(str(data.get('request','')),str(data.get('target','extensions/research_extensions.py')))
+                    sp.note('status',result.get('status','unknown') if isinstance(result,dict) else '?')
                 brain.log('coder','multi_agent_run','agent_run','success' if result.get('status')=='awaiting_tests_and_approval' else 'failure','Çok ajanlı geliştirme: '+str(result.get('status','unknown')),result.get('id'),{'proposal_id':result.get('proposal_id')})
                 return self.send(201,result)
             if self.path=='/api/upgrade-propose': return self.send(201,upgrades.propose(data.get('target'),data.get('code'),data.get('description','')))
@@ -394,6 +497,8 @@ if __name__=='__main__':
     queued=upgrades.sweep_untested()
     print('Otomatik güncelleme:',('açık' if upgrades.auto_apply_enabled() else 'kapalı (AXIS_AUTO_APPLY)'),'· kuyruğa alınan:',len(queued))
     AFTER_RESEARCH=start_rag_embedding
+    MEMORY_INDEXING=True
+    start_memory_worker()
     print('Anlamsal dizin (bge-m3):','arka planda güncelleniyor' if start_rag_embedding() else 'başlatılamadı')
     print('AXIS Brain: http://127.0.0.1:8765')
     ThreadingHTTPServer(('127.0.0.1',8765),Handler).serve_forever()
