@@ -35,3 +35,19 @@ Kullanıcının açık kararıyla (2026-11-10) çekirdek güncellemeler artık *
 - **Denetim kaydı:** her otomatik uygulama ve test başarısızlığı `central_brain` deneyimlerine (`agent='auto_upgrade'`) ve `upgrades.sqlite3` içindeki `auto_events` tablosuna yazılır; arayüzde "Otomatik uygulandı: <hedef> — <açıklama>" olarak görünür.
 - **Geri alma:** her otomatik uygulanan öğede "Geri al" (onay penceresi + `GERI_AL`) kalır. Uygulama ve geri alma, sunucu yeniden başlatılınca etkin olur ("yeniden başlatma gerekli").
 - **Değişmeyenler:** beceri dosyaları, ajan rolleri ve öğrenilmiş beceriler hâlâ elle onay ister. Docker testi yalnızca sözdizimi, AST sözleşmesi ve verilen davranış testlerini çalıştırır; PASS işlevsel doğruluğun kanıtı değildir.
+## Literatür kaynakları
+
+- Araştırma önce OpenAlex'i kullanır. OpenAlex anahtarsız kullanımda küçük bir günlük kota uygular; kota dolunca (HTTP 429) iş otomatik olarak arXiv API'sine (ücretsiz, anahtarsız) geçer. İş ayrıntısında hangi kaynağın kullanıldığı yazar (`OpenAlex: …` / `arXiv: … · OpenAlex günlük ücretsiz kotası doldu → arXiv kullanıldı`).
+- İsteğe bağlı: ücretsiz bir OpenAlex anahtarı `OPENALEX_API_KEY` ortam değişkeniyle verilirse istekte kullanılır. Anahtar depoya yazılmaz.
+- arXiv kayıtlarında kavram etiketleri arXiv kategorileridir (ör. `cs.LG`); doğrulanmış çıkarım değildir.
+- Araştırma tamamlanınca ya da başarısız olunca sonuç sohbete de yazılır.
+
+## Soru-cevap: hibrit arama (RAG)
+
+- Soru sorulduğunda bellek üç yoldan aranır ve sonuçlar karşılıklı sıra füzyonu (RRF) ile birleştirilir: SQLite FTS5 tam metin araması (BM25, başlık ağırlıklı, Türkçe aksan katlamalı), yerel gömme modeliyle anlamsal arama (`axis_memory`, Ollama `bge-m3`, çok dilli: Türkçe soru İngilizce özeti bulur; PDF bölümleri de buradan gelir) ve eski Türkçe→İngilizce anahtar kelime eşleyicisi.
+- Model en fazla 8 kaydı numaralı olarak görür ve yanıtta `[1]`, `[2]` diye atıf yapar; arayüz numaralı kaynakları, ağda gösterme düğmesini ve yalnızca http(s) bağlantılarını gösterir.
+- **Tek gömme deposu:** vektörler yalnızca `axis_memory.sqlite3` dosyasındadır (`axis_memory.py`; bilgi ağı düğümleri, makale özetleri ve PDF bölümleri). Onu tek bir arka plan işçisi (`axis-memory-index`) günceller: sunucu açılınca, her araştırma/PDF sonrasında ve 10 dakikada bir. İşçi her turda silinmiş düğümlerin kayıtlarını da depodan temizler (PDF bölümleri, kaynak PDF'i silinmedikçe kalır; boş bir vector.db depoyu silmez). Her soru için sorgu yalnızca bir kez gömülür ve depo bir kez taranır.
+- `vector.rag.sqlite3` (vector.db'nin yanında, git'e girmez) artık yalnızca FTS5 tam metin dizinini tutar. Silinirse vector.db'den yeniden kurulur; her soruda özet karşılaştırmasıyla güncellenir (~0,03 sn). İçindeki eski `embeddings` tablosu (kaldırılan `rag_embed.py`'nin ikinci gömme deposu) kullanılmıyor; AXIS ona dokunmaz. İstersen sunucu kapalıyken `DROP TABLE embeddings; VACUUM;` ile ya da dosyayı silerek yer açabilirsin.
+- Anlamsal isabetler RRF'ye şöyle girer: düğüm → `node:<id>` (makale düğümü, kanıt bağıyla `src:<kaynak>` kaydına eşlenir; böylece URL/yıl korunur ve aynı makale üç listede tek belge sayılır), PDF bölümü → `chunk:<id>` (numaralı kayıt, en fazla 700 karakter). Yanıttaki `semantic` alanı, modele giden kayıtlardan en az birinin gömme aramasıyla bulunduğunu söyler.
+- Durum: Sistem → «Anlamsal dizin», `GET /api/rag-status` (`embedded_docs`/`memory_items`/`pending`/`available` axis_memory'den, `fts_docs` tam metin dizininden). `POST /api/memory-backfill`, arka plan işçisi o anda çalışıyorsa aynı kayıtları ikinci kez gömmek yerine `busy: true` döner.
+- Gömme modeli `AXIS_EMBED_MODEL` ile değiştirilebilir; model değişince vektörler yeniden üretilir. Bulut modelleri reddedilir; tüm istekler 127.0.0.1 üzerinden gider. Ollama kapalıysa arama tam metin + anahtar kelimeyle sürer.

@@ -83,7 +83,7 @@ class ResearchLimitTests(unittest.TestCase):
         with server.connect() as db:
             row = db.execute('SELECT status,details FROM jobs WHERE id=?', (body['job_id'],)).fetchone()
         self.assertEqual(row['status'], 'completed')
-        self.assertEqual(row['details'], '30 kayıt istendi · 3 akademik kayıt işlendi')
+        self.assertEqual(row['details'], 'OpenAlex: 30 kayıt istendi · 3 akademik kayıt işlendi')
 
     def test_start_research_validates_limit(self):
         for bad in (0, 201, 'abc', True):

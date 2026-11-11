@@ -9,7 +9,7 @@ from pathlib import Path
 DB=Path(os.getenv('VECTOR_BRAIN_DB',str(Path(__file__).with_name('central_brain.sqlite3'))))
 LOCK=threading.RLock()
 ROLES={'research','planner','coder','reviewer','tester','visual','orchestrator','system','assistant','auto_upgrade'}
-TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_research','agent_scan','agent_run','graph','neural_view','pdf_ingest','local_llm','core_upgrade'}
+TOOLS={'research','synthesize','search_memory','count_nodes','list_recent_research','agent_scan','agent_run','graph','neural_view','pdf_ingest','local_llm','core_upgrade','skill_run'}
 
 def now():return datetime.now(timezone.utc).isoformat()
 def _setup(db):
@@ -27,8 +27,11 @@ def log(agent,action,tool,status,summary,task_id=None,evidence=None):
     if not isinstance(summary,str) or not summary.strip() or len(summary)>2000:raise ValueError('Özet 1-2000 karakter olmalı')
     if not isinstance(action,str) or not 1<=len(action)<=120:raise ValueError('Geçersiz eylem')
     eid=uuid.uuid4().hex
+    raw=json.dumps(evidence or {},ensure_ascii=False)
+    # Cutting JSON text mid-way would store an unparseable record; keep an explicit, valid marker instead.
+    if len(raw)>4000:raw=json.dumps({'truncated':True,'preview':raw[:3000]},ensure_ascii=False)
     with LOCK,conn() as db:
-        db.execute('INSERT INTO experiences VALUES (?,?,?,?,?,?,?,?,?)',(eid,str(task_id or uuid.uuid4().hex)[:100],agent,action,tool,status,summary,json.dumps(evidence or {},ensure_ascii=False)[:4000],now()))
+        db.execute('INSERT INTO experiences VALUES (?,?,?,?,?,?,?,?,?)',(eid,str(task_id or uuid.uuid4().hex)[:100],agent,action,tool,status,summary,raw,now()))
         db.commit()
     return {'id':eid,'status':status}
 

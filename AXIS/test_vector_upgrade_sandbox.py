@@ -1,12 +1,23 @@
-import contextlib, shutil, sys, tempfile, unittest
+import contextlib, os, shutil, sys, tempfile, unittest
 from pathlib import Path
 from unittest import mock
 
+import axis_executor, axis_learning, central_brain
 import vector_upgrade as vu
 
 
 def _pair(cmd, a, b):
     return any(cmd[i] == a and cmd[i + 1] == b for i in range(len(cmd) - 1))
+
+
+def sentinels(stdin_text):
+    """What a completed container run prints: one AXIS-STAGE-OK line per stage nonce sent on stdin."""
+    return '\n'.join(f'AXIS-STAGE-OK {k} {v}' for k, v in zip(('CONTRACT', 'BEHAVIOR', 'SUITE'), stdin_text.split()))
+
+
+def host_child(code):
+    """docker_command replacement: a host Python child that reads the nonces from stdin like the controller."""
+    return lambda name, src: [sys.executable, '-I', '-c', code]
 
 
 class VectorUpgradeSandboxTests(unittest.TestCase):
@@ -20,19 +31,42 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
         root.mkdir()
         self.root = root
         # ROOT too: decide()/rollback() must never write the real target files.
-        for name, val in (('DATA', data), ('DB', data / 'upgrades.sqlite3'), ('TESTS', tests), ('ROOT', root)):
-            p = mock.patch.object(vu, name, val)
+        for mod, name, val in ((vu, 'DATA', data), (vu, 'DB', data / 'upgrades.sqlite3'), (vu, 'TESTS', tests),
+                               (vu, 'ROOT', root), (central_brain, 'DB', data / 'central_brain.sqlite3'),
+                               (axis_learning, 'DB', data / 'axis_learning.sqlite3'),
+                               (axis_executor, 'DB', data / 'axis_runs.sqlite3')):
+            p = mock.patch.object(mod, name, val)
             p.start()
             self.addCleanup(p.stop)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop('AXIS_VERIFY_SUITE', None)
 
     def _propose(self):
         return vu.propose('skills_helpers.py', 'def f():\n return 1\n', 'sandbox test')['id']
 
+    def _docker(self, side_effect=None, returncode=0):
+        """Patch the container run and subprocess.run (cleanup) with ONE mock so call order is preserved.
+        side_effect may return a result; otherwise a run that echoes the completion sentinels is returned."""
+        def fake(cmd, **kw):
+            if side_effect is not None:
+                result = side_effect(cmd, **kw)
+                if result is not None:
+                    return result
+            out = sentinels(kw.get('input', '')) if returncode == 0 else 'fail'
+            return mock.Mock(returncode=returncode, stdout=out, stderr='')
+        run = mock.Mock(side_effect=fake)
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(vu, 'docker_available', return_value=True))
+        stack.enter_context(mock.patch.object(vu, '_container_run', run))
+        stack.enter_context(mock.patch.object(vu.subprocess, 'run', run))
+        return stack, run
+
     def test_docker_command_is_locked_down(self):
         uid = self._propose()
-        fake = mock.Mock(returncode=0, stdout='ok', stderr='')
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run', return_value=fake) as run:
+        stack, run = self._docker()
+        with stack:
             result = vu.verify(uid)
         self.assertTrue(result['passed'])
         cmd = run.call_args[0][0]
@@ -44,29 +78,35 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
             self.assertTrue(_pair(cmd, a, b), (a, b))
         self.assertIn('--read-only', cmd)
         self.assertIn('python:3.12-slim', cmd)
+        self.assertIn('--pull=never', cmd)
+        self.assertLess(cmd.index('--pull=never'), cmd.index('python:3.12-slim'))
         mount = cmd[cmd.index('--mount') + 1]
         self.assertIn('readonly', mount)
         self.assertIn('dst=/work', mount)
         tmpfs = cmd[cmd.index('--tmpfs') + 1]
         self.assertIn('noexec', tmpfs)
         self.assertIn('nosuid', tmpfs)
+        self.assertEqual(cmd.count('--mount'), 1)
+        self.assertNotIn('--privileged', cmd)
+        self.assertEqual(run.call_args.kwargs['timeout'], vu.VERIFY_TIMEOUT)
 
     def test_blocked_without_docker(self):
         uid = self._propose()
         with mock.patch.object(vu, 'docker_available', return_value=False), \
+             mock.patch.object(vu, '_container_run') as crun, \
              mock.patch.object(vu.subprocess, 'run') as run:
             result = vu.verify(uid)
         self.assertFalse(result['passed'])
         self.assertTrue(result['report'].startswith('BLOCKED'))
+        crun.assert_not_called()
         for call in run.call_args_list:
             args = call[0][0] if call[0] else []
             self.assertFalse(len(args) > 1 and args[:2] == ['docker', 'run'])
 
     def test_docker_command_has_container_name(self):
         uid = self._propose()
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run',
-                               return_value=mock.Mock(returncode=0, stdout='', stderr='')) as run:
+        stack, run = self._docker()
+        with stack:
             vu.verify(uid)
 
         cmd = run.call_args.args[0]
@@ -85,8 +125,8 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                 raise vu.subprocess.TimeoutExpired(cmd, 35)
             return mock.Mock(returncode=0)
 
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup) as run:
+        stack, run = self._docker(timeout_then_cleanup)
+        with stack:
             result = vu.verify(uid)
 
         self.assertEqual(run.call_count, 2)
@@ -98,6 +138,7 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
         self.assertIs(result['passed'], False)
         self.assertTrue(result['report'].startswith('FAIL: Docker test zaman aşımı'))
         self.assertIn('; konteyner kaldırıldı', result['report'])
+        self.assertIn('SUITE: ERROR (zaman aşımı)', result['report'])
 
     def test_timeout_cleanup_oserror_is_reported(self):
         uid = self._propose()
@@ -107,8 +148,8 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                 raise vu.subprocess.TimeoutExpired(cmd, 35)
             raise OSError('Docker cleanup failed')
 
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run', side_effect=timeout_then_cleanup_error) as run:
+        stack, run = self._docker(timeout_then_cleanup_error)
+        with stack:
             result = vu.verify(uid)
 
         self.assertEqual(run.call_count, 2)
@@ -126,36 +167,78 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                 fake_tmp = mock.Mock()
                 fake_tmp.__enter__ = mock.Mock(return_value=str(Path(self.tmp.name) / bad))
                 fake_tmp.__exit__ = mock.Mock(return_value=False)
-                with mock.patch.object(vu, 'docker_available', return_value=True), \
-                     mock.patch.object(vu.tempfile, 'TemporaryDirectory', return_value=fake_tmp), \
-                     mock.patch.object(vu.subprocess, 'run') as run:
+                stack, run = self._docker()
+                with stack, mock.patch.object(vu.tempfile, 'TemporaryDirectory', return_value=fake_tmp):
                     result = vu.verify(uid)
                 run.assert_not_called()
-                self.assertEqual(result, {'passed': False, 'report': 'FAIL: güvensiz bağlama yolu'})
-                self.assertEqual(vu.detail(uid)['report'], 'FAIL: güvensiz bağlama yolu')
+                self.assertFalse(result['passed'])
+                self.assertEqual(result['report'].splitlines()[:4],
+                                 ['FAIL: güvensiz bağlama yolu', 'CONTRACT: NOT RUN',
+                                  'BEHAVIOR: SKIPPED (davranış testi yok)', 'SUITE: NOT RUN'])
+                self.assertEqual(vu.detail(uid)['report'], result['report'])
+
+    # ---- the real bounded reader (_container_run) with a host Python child instead of docker ----
+    def _real_run(self, code):
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(vu, 'docker_available', return_value=True))
+        stack.enter_context(mock.patch.object(vu, 'docker_command', host_child(code)))
+        cleanup = stack.enter_context(mock.patch.object(vu.subprocess, 'run',
+                                                        return_value=mock.Mock(returncode=0)))
+        return stack, cleanup
+
+    ECHO = ("import sys\nn=sys.stdin.readline().split()\n"
+            "for k,v in zip(('CONTRACT','BEHAVIOR','SUITE'),n):print('AXIS-STAGE-OK',k,v,flush=True)\n")
 
     def test_non_utf8_locale_output_is_recorded(self):
         # Real child process emits bytes that neither UTF-8 nor cp125x can decode strictly.
         uid = self._propose()
-        real_run = vu.subprocess.run
-
-        def child(cmd, **kwargs):
-            code = 'import sys; sys.stdout.buffer.write(b"\\xc4\\x9e \\x81\\xff")'
-            return real_run([sys.executable, '-I', '-c', code], **kwargs)
-
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run', side_effect=child):
+        stack, _ = self._real_run('import sys; sys.stdout.buffer.write(b"\\xc4\\x9e \\x81\\xff\\n"); sys.stdout.flush()\n' + self.ECHO)
+        with stack:
             result = vu.verify(uid)
-        self.assertTrue(result['passed'])
+        self.assertTrue(result['passed'], result['report'])
         self.assertIn('Ğ', result['report'])
         self.assertEqual(vu.detail(uid)['report'], result['report'])
 
+    def test_sentinels_found_even_when_pushed_out_of_the_tail(self):
+        uid = self._propose()
+        stack, _ = self._real_run(self.ECHO + "sys.stdout.write('y'*200000)\n")
+        with stack:
+            result = vu.verify(uid)
+        self.assertTrue(result['passed'], result['report'][:300])
+        self.assertLessEqual(len(result['report']), vu.REPORT_LIMIT)
+
+    def test_early_exit_without_evidence_fails(self):
+        uid = self._propose()
+        for code in ('import sys; sys.exit(0)', 'import os; os._exit(0)',
+                     'print("AXIS-STAGE-OK CONTRACT guess")\nprint("AXIS-STAGE-OK SUITE guess")'):
+            with self.subTest(code=code):
+                stack, _ = self._real_run(code)
+                with stack:
+                    result = vu.verify(uid)
+                self.assertFalse(result['passed'])
+                self.assertEqual(result['report'].splitlines()[:4],
+                                 ['FAIL', 'CONTRACT: FAIL (tamamlanma kanıtı yok)',
+                                  'BEHAVIOR: SKIPPED (davranış testi yok)', 'SUITE: FAIL (tamamlanma kanıtı yok)'])
+
+    def test_output_flood_is_cut_and_container_removed(self):
+        uid = self._propose()
+        with mock.patch.object(vu, 'OUTPUT_LIMIT', 300000):
+            stack, cleanup = self._real_run(self.ECHO + "while True:sys.stdout.write('z'*65536)\n")
+            with stack:
+                result = vu.verify(uid)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['report'].startswith('FAIL: konteyner çıktısı 300000 bayt sınırını aştı; konteyner kaldırıldı'))
+        self.assertIn('SUITE: ERROR (çıktı sınırı)', result['report'])
+        self.assertEqual(cleanup.call_args.args[0][:3], ['docker', 'rm', '-f'])
+
     def test_docker_oserror_is_recorded(self):
         uid = self._propose()
-        with mock.patch.object(vu, 'docker_available', return_value=True), \
-             mock.patch.object(vu.subprocess, 'run', side_effect=FileNotFoundError('docker')):
+        stack, _ = self._docker(lambda cmd, **kw: (_ for _ in ()).throw(FileNotFoundError('docker')))
+        with stack:
             result = vu.verify(uid)
-        self.assertEqual(result, {'passed': False, 'report': 'FAIL: Docker çalıştırılamadı: FileNotFoundError'})
+        self.assertFalse(result['passed'])
+        self.assertEqual(result['report'].splitlines()[0], 'FAIL: Docker çalıştırılamadı: FileNotFoundError')
+        self.assertIn('CONTRACT: NOT RUN', result['report'])
         self.assertEqual(vu.detail(uid)['report'], result['report'])
 
     @unittest.skipUnless(sys.platform == 'win32', 'Windows file locking')
@@ -168,11 +251,10 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
             work = Path(mount.split('src=', 1)[1].split(',dst=', 1)[0])
             dirs.append(work)
             held.append(open(work / 'skills_helpers.py', 'rb'))
-            return mock.Mock(returncode=0, stdout='ok', stderr='')
 
         try:
-            with mock.patch.object(vu, 'docker_available', return_value=True), \
-                 mock.patch.object(vu.subprocess, 'run', side_effect=hold_file):
+            stack, _ = self._docker(hold_file)
+            with stack:
                 result = vu.verify(uid)
         finally:
             for handle in held:
@@ -183,11 +265,7 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
         self.assertTrue(vu.detail(uid)['report'].startswith('PASS'))
 
     def _docker_passes(self, run=None):
-        stack = contextlib.ExitStack()
-        stack.enter_context(mock.patch.object(vu, 'docker_available', return_value=True))
-        fake = mock.Mock(returncode=0, stdout='ok', stderr='')
-        stack.enter_context(mock.patch.object(vu.subprocess, 'run', side_effect=run, return_value=fake))
-        return stack
+        return self._docker(run)[0]
 
     def _approve(self, code):
         uid = vu.propose('skills_helpers.py', code, 'apply test')['id']
@@ -224,12 +302,30 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
             mount = cmd[cmd.index('--mount') + 1]
             work = Path(mount.split('src=', 1)[1].split(',dst=', 1)[0])
             seen.append((work / 'skills_helpers.py').read_bytes())
-            return mock.Mock(returncode=0, stdout='ok', stderr='')
 
         with self._docker_passes(capture):
             result = vu.decide(uid, 'approve', 'ONAYLIYORUM')
         self.assertEqual(result['status'], 'applied')
         self.assertEqual(seen, [code.encode()])
+        self.assertEqual((self.root / 'skills_helpers.py').read_bytes(), code.encode())
+
+    def test_applies_the_verified_bytes_not_a_later_reread(self):
+        code = 'def f():\n return 1\n'
+        uid = vu.propose('skills_helpers.py', code, 'toctou')['id']
+        staged = vu.DATA / (uid + '.py')
+        state = {'tested': False}
+        real_safe_target = vu.safe_target
+
+        def after_test(cmd, **kw):
+            state['tested'] = True
+
+        def swap_then_validate(name):
+            if state['tested']:  # window between the last digest check and the write
+                staged.write_bytes(b'def f():\n return 666\n')
+            return real_safe_target(name)
+
+        with self._docker_passes(after_test), mock.patch.object(vu, 'safe_target', swap_then_validate):
+            vu.decide(uid, 'approve', 'ONAYLIYORUM')
         self.assertEqual((self.root / 'skills_helpers.py').read_bytes(), code.encode())
 
     def test_syntax_error_is_value_error(self):
@@ -255,6 +351,7 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                     row = vu.detail(uid)
                     self.assertEqual((row['status'], row['backup']), ('pending', ''))
                     self.assertEqual([p.name for p in self.root.iterdir() if p != target], [])
+                    self.assertEqual(list((vu.DATA / 'journal').glob('*.json')), [])
 
     def test_rollback_db_failure_keeps_applied_file(self):
         target = self.root / 'skills_helpers.py'
@@ -280,6 +377,22 @@ class VectorUpgradeSandboxTests(unittest.TestCase):
                         self.assertFalse(target.exists())
                     else:
                         self.assertEqual(target.read_bytes(), original)
+
+    def test_atomic_write_never_follows_existing_temp_names(self):
+        target = self.root / 'skills_helpers.py'
+        target.write_bytes(b'old')
+        outside = Path(self.tmp.name) / 'outside.txt'
+        outside.write_bytes(b'keep')
+        # Pre-planted files at the old predictable names must be neither written through nor deleted.
+        planted = [target.with_name(target.name + '.x.tmp'), target.with_name(target.name + '.x.undo')]
+        for p in planted:
+            p.write_bytes(b'planted')
+        vu._atomic_write(target, b'new')
+        self.assertEqual(target.read_bytes(), b'new')
+        self.assertEqual(outside.read_bytes(), b'keep')
+        for p in planted:
+            self.assertEqual(p.read_bytes(), b'planted')
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), sorted([target.name] + [p.name for p in planted]))
 
     def test_connection_closed_when_setup_fails(self):
         made = []

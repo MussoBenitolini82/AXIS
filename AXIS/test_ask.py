@@ -145,7 +145,7 @@ class AnswerQuestionTests(TempDBMixin, unittest.TestCase):
             r = vi.answer_question('neural network')
         self.assertLessEqual(len(r['used_memory']), vi.MAX_MEMORY_ITEMS)
         block = seen[0][1]['content'].split('\n\nSoru: ')[0]
-        self.assertLess(len(block), vi.MAX_MEMORY_CHARS + 100)
+        self.assertLess(len(block), vi.RAG_CONTEXT_CHARS + 100)
 
     def test_question_validation(self):
         for bad in ('', '   ', 'x' * (vi.MAX_QUESTION + 1), None, 5):

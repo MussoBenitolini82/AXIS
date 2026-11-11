@@ -27,6 +27,7 @@ document.documentElement.setAttribute('data-theme',p)})();
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="i-trace" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v3M6 14v3M11 5h9M11 12h6M11 19h8"/></symbol>
 </svg>
 <a class="skip" href="#main">İçeriğe geç</a>
 
@@ -37,8 +38,9 @@ document.documentElement.setAttribute('data-theme',p)})();
       <li><button type="button" class="rail-btn" data-tab="chat" data-tip="Sohbet (Ctrl+1)" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><span class="rail-label">Sohbet</span></button></li>
       <li><button type="button" class="rail-btn" data-tab="ag" data-tip="Ağ (Ctrl+2)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-neural"/></svg><span class="rail-label">Ağ</span></button></li>
       <li><button type="button" class="rail-btn" data-tab="updates" data-tip="Güncellemeler (Ctrl+3)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-updates"/></svg><span class="rail-label">Güncellemeler</span><span class="badge" id="apprCount" data-n="0"></span></button></li>
-      <li><button type="button" class="rail-btn" data-tab="system" data-tip="Sistem (Ctrl+4)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-system"/></svg><span class="rail-label">Sistem</span><span class="sdot" id="sysDot" data-state="unknown" aria-hidden="true"></span></button></li>
-      <li><button type="button" class="rail-btn" data-tab="tools" data-tip="Araçlar (Ctrl+5)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-tools"/></svg><span class="rail-label">Araçlar</span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="trace" data-tip="Görev izi (Ctrl+4)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-trace"/></svg><span class="rail-label">Görev izi</span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="system" data-tip="Sistem (Ctrl+5)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-system"/></svg><span class="rail-label">Sistem</span><span class="sdot" id="sysDot" data-state="unknown" aria-hidden="true"></span></button></li>
+      <li><button type="button" class="rail-btn" data-tab="tools" data-tip="Araçlar (Ctrl+6)" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-tools"/></svg><span class="rail-label">Araçlar</span></button></li>
       <li aria-hidden="true" class="rail-ind-li"><span class="rail-ind" id="railInd"></span></li>
     </ul>
     <div class="rail-foot">
@@ -54,7 +56,7 @@ document.documentElement.setAttribute('data-theme',p)})();
         <button type="button" class="ghost icon" id="themeBtn" aria-label="Tema: Koyu" title="Tema: Koyu"><svg class="ic" aria-hidden="true"><use href="#i-theme"/></svg></button>
         <details class="help"><summary aria-label="Klavye kısayolları" title="Kısayollar">?</summary>
           <div class="help-pop"><dl>
-            <dt>Ctrl+1…5</dt><dd>Bölüm değiştir (Alt+1…5 da olur)</dd>
+            <dt>Ctrl+1…6</dt><dd>Bölüm değiştir (Alt+1…6 da olur)</dd>
             <dt>/</dt><dd>Sohbette yazmaya başla; Ağ'da düğüm ara</dd>
             <dt>Enter</dt><dd>Gönder · Shift+Enter yeni satır</dd>
             <dt>Esc</dt><dd>Paneli kapat</dd>
@@ -88,6 +90,7 @@ document.documentElement.setAttribute('data-theme',p)})();
             <div class="answer-state" id="answerState"><span class="spinner" aria-hidden="true"></span><span id="answerWait"></span></div>
             <div class="answer-text" id="answerText"></div>
             <div class="answer-meta" id="answerMeta"></div>
+            <div class="answer-fb" id="answerFb" hidden></div>
           </section>
         </div>
         <form id="cmd" class="composer" autocomplete="off">
@@ -161,13 +164,33 @@ document.documentElement.setAttribute('data-theme',p)})();
         <div id="approvals" tabindex="-1" class="card">
           <p class="auto-line"><span class="pill" id="autoMode" data-state="unknown">Otomatik güncelleme: —</span>
             <span class="hint" tabindex="0" title="Çekirdek güncellemeler yalnızca izole Docker testi PASS olursa uygulanır. Korunan dosyalar: vector_upgrade.py, local_models.py, server.py, axis_sqlite.py, test_*.py. Kapatmak için sunucuyu AXIS_AUTO_APPLY=0 ile başlat. Diğer öneriler senin onayını bekler." aria-label="Docker testi PASS olmadan hiçbir çekirdek güncelleme uygulanmaz. Diğer öneriler senin onayını bekler.">?</span></p>
+          <p class="note" id="autoScope">Otomatik uygulama kapsamı: —</p>
           <p class="restart" id="restartNote" hidden>Yeniden başlatma gerekli</p>
           <h2 class="sub-h">Son otomatik</h2>
           <div id="apAuto"><p class="empty">Henüz yok.</p></div>
           <h2 class="sub-h">Bekleyen</h2>
           <p class="empty" id="apprEmpty">Onay bekleyen öneri yok.</p>
           <div id="apUpgrade"></div><div id="apSkill"></div><div id="apAgent"></div><div id="apBrain"></div>
+          <h2 class="sub-h" id="hRunnable">Çalıştırılabilir beceriler</h2>
+          <p class="note">Onaylı beceriler yalnızca Docker içinde çalışır; AXIS beceri kodunu ana makinede asla çalıştırmaz.</p>
+          <div id="apRunnable" aria-labelledby="hRunnable"><p class="empty">Yükleniyor…</p></div>
           <pre id="updOut" class="console" aria-live="polite"></pre>
+        </div>
+      </section>
+
+      <!-- ============ Görev izi ============ -->
+      <section class="panel" id="panel-trace" aria-labelledby="viewTitle" hidden>
+        <p class="note">Ajan görevlerinin adım adım izi. Yalnızca okunur; bu bölüm açıkken kendiliğinden yenilenir.</p>
+        <p class="fb-err" id="traceErr" role="alert" hidden></p>
+        <ul class="status-list" id="traceTiles" aria-label="Görev özeti">
+          <li class="st" id="tt-count" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Görev sayısı</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="tt-failed" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Başarısız</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="tt-avg" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Ortalama süre</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="tt-slow" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>En yavaş</span><span class="st-val">—</span><span class="st-note"></span></li>
+        </ul>
+        <div class="trace-grid">
+          <section class="card" aria-labelledby="hTraceList"><div class="card-h"><h2 id="hTraceList">Görevler</h2></div><div id="traceList"><p class="empty">Yükleniyor…</p></div></section>
+          <section class="card" aria-labelledby="hTraceDet"><div class="card-h"><h2 id="hTraceDet">Zaman çizelgesi</h2></div><div id="traceDetail" tabindex="-1" aria-live="polite"><p class="empty">Ayrıntı için soldan bir görev seç.</p></div></section>
         </div>
       </section>
 
@@ -181,7 +204,9 @@ document.documentElement.setAttribute('data-theme',p)})();
           <li class="st" id="st-torch" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Sinir ağı</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-docker" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Docker</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-jobs" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Araştırma</span><span class="st-val">—</span><span class="st-note"></span></li>
-          <li class="st" id="st-nodes" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-rag" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Anlamsal dizin</span><span class="st-val">—</span><span class="st-note"></span></li>
+          <li class="st" id="st-memory" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bellek dizini</span><span class="st-val">—</span><span class="st-note"></span><button type="button" class="st-act" id="memBackfill" title="Gömülmemiş kayıtları anlamsal dizine ekler">Dizini güncelle</button></li>
+          <li class="st" id="st-nodes"data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Düğüm</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-approvals" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Bekleyen</span><span class="st-val">—</span><span class="st-note"></span></li>
           <li class="st" id="st-autoupd" data-state="unknown"><span class="st-k"><span class="dot" aria-hidden="true"></span>Oto. güncelleme</span><span class="st-val">—</span><span class="st-note"></span></li>
         </ul>
@@ -226,7 +251,7 @@ document.documentElement.setAttribute('data-theme',p)})();
         <details class="tool" id="panel-v5">
           <summary>Çekirdek güncellemeler</summary>
           <div class="tool-body">
-            <label for="v5target">Hedef modül</label><input id="v5target" value="research_extensions.py" placeholder="modul.py" title="AXIS üst düzey .py; korunan dosyalar ve test_*.py hariç">
+            <label for="v5target">Hedef (extensions/&lt;ad&gt;.py)</label><input id="v5target" value="extensions/research_extensions.py" placeholder="extensions/&lt;ad&gt;.py" title="Yalnızca extensions/*.py hedefleri Docker testi PASS olunca otomatik uygulanır; üst düzey modüller elle onay bekler. Korunan dosyalar ve test_*.py hariç.">
             <label for="v5code">Python kodu</label><textarea id="v5code" rows="7" placeholder="Önerilen kod"></textarea>
             <label for="v5desc">Açıklama</label><input id="v5desc" placeholder="Değişiklik açıklaması">
             <div class="actions"><button type="button" class="primary" data-act="v5propose" title="Docker testi PASS ise otomatik uygulanır">Öner</button><button type="button" data-act="v5list">Yenile</button></div>
@@ -240,7 +265,7 @@ document.documentElement.setAttribute('data-theme',p)})();
             <label for="agentRequest">Geliştirme isteği</label>
             <textarea id="agentRequest" rows="3" placeholder="Örn. metinleri özetleyen saf bir Python fonksiyonu"></textarea>
             <label for="agentTarget">Hedef modül</label>
-            <select id="agentTarget"><option>research_extensions.py</option><option>skills_helpers.py</option></select>
+            <select id="agentTarget"><option>extensions/research_extensions.py</option><option>skills_helpers.py</option></select>
             <div class="actions"><button type="button" id="agentStart" class="primary" data-act="agentRun">Ajanları çalıştır</button><button type="button" data-act="agentList">Geçmiş</button></div>
             <pre id="agentOutput" class="console" aria-live="polite"></pre>
             <label for="v9task">Yetenek taraması</label><textarea id="v9task" rows="2" placeholder="Görev"></textarea>
@@ -271,6 +296,7 @@ document.documentElement.setAttribute('data-theme',p)})();
 
 <script src="/static/graph.js"></script>
 <script src="/static/neural.js"></script>
+<script src="/static/v14.js"></script>
 <script>
 'use strict';
 /* =====================================================================
@@ -390,11 +416,13 @@ function ensureNeural(){
   /* onInputChange(a,b) is a shell extension to the brief's contract: neural.js may call it when the user flips a/b
      so the shell fetches /api/neural?a=&b= and updates both modules. Without it the shell's own a/b buttons do this. */
   $('#neuralHost').hidden=false;
-  try{AxisNeural.mount($('#neuralHost'),{onNodeSelect:()=>{},onInputChange:(a,b)=>setXor(a,b)});neuralMounted=true}catch(e){neuralError(e)}
+  try{AxisNeural.mount($('#neuralHost'),{onNodeSelect:()=>{},onInputChange:(a,b)=>setXor(a,b)});neuralMounted=true;shellXorUi(false)}catch(e){neuralError(e)}
   return neuralMounted;
 }
+/* neural.js has its own a/b pairs and readout; hide the shell's copies while it is mounted (no duplicate aria-live) */
+function shellXorUi(show){$('#pane-neural > .xor-in').hidden=!show;$('#neuralReadout').hidden=!show}
 function neuralError(e){
-  neuralFailed=true;neuralMounted=false;console.warn('AxisNeural:',e);
+  neuralFailed=true;neuralMounted=false;shellXorUi(true);console.warn('AxisNeural:',e);
   try{if(window.AxisNeural&&AxisNeural.destroy)AxisNeural.destroy()}catch(x){}
   $('#neuralHost').replaceChildren();$('#neuralHost').hidden=true;const box=$('#neuralErr');box.hidden=false;
   box.replaceChildren(modErrorCard('Ayrıntılı XOR görünümü (neural.js) açılamadı; temel bilgiler aşağıda.',async()=>{neuralFailed=false;box.hidden=true;if(!window.AxisNeural){try{await loadScript('neural.js')}catch(x){return neuralError(x)}}ensureNeural();afterNeural()}));
@@ -487,13 +515,13 @@ $('#agRefresh').addEventListener('click',()=>loadNetwork());
 
 /* ---------------- Automatic read-only refresh ---------------- */
 let lastNodeCount=null,jobSeen=null,researchJobs=[];
-const pendingResearch=new Set();
+const pendingResearch=new Set(),myJobs=new Set();
 function researchDetail(detail){const text=String(detail||'');return /\bHTTP(?: Error)?\s+429\b/i.test(text)?'OpenAlex istek sınırına ulaşıldı (HTTP 429). Bir süre bekleyip yeniden dene; aynı konuyu art arda başlatma.':text}
 function renderJobs(jobs){
   researchJobs=jobs;
   const root=$('#jobs');root.replaceChildren();const next=new Map();let running=0,failed=0;
-  for(const j of jobs){const detail=researchDetail(j.details);const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${detail}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
-    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+detail,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok')}else if(j.status==='failed')feed('Araştırma tamamlanamadı: '+j.topic+' — '+detail,'fail',true);else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
+  for(const j of jobs){const detail=j.status==='failed'?researchDetail(j.details):String(j.details||'');const div=el('div','job');div.dataset.status=j.status;div.textContent=`${j.status==='completed'?'✓':j.status==='failed'?'✕':'…'} ${j.topic}: ${detail}`;root.append(div);next.set(j.id,j.status);if(j.status==='running')running++;if(j.status==='failed')failed++;
+    if(jobSeen&&jobSeen.get(j.id)!==j.status){if(j.status==='completed'){feed('Araştırma tamamlandı: '+j.topic+' — '+detail,'ok',true);toast('Araştırma tamamlandı: '+j.topic,'ok');if(myJobs.delete(j.id))localAnswer('araştır '+j.topic,'Araştırma tamamlandı: «'+j.topic+'» — '+detail+'. Şimdi «'+j.topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma')}else if(j.status==='failed'){feed('Araştırma tamamlanamadı: '+j.topic+' — '+detail,'fail',true);toast('Araştırma başarısız: '+j.topic,'fail');if(myJobs.delete(j.id))localAnswer('araştır '+j.topic,'Araştırma başarısız: «'+j.topic+'» — '+detail,'Araştırma','failed')}else if(!jobSeen.has(j.id))feed('Araştırma başladı: '+j.topic,'info')}}
   if(!jobs.length)root.append(el('p','empty','Henüz araştırma yok.'));
   jobSeen=next;
   setSt('jobs',failed?'fail':running?'warn':jobs.length?'ok':'notrun',running?running+' çalışıyor':jobs.length?'Boşta':'NOT RUN',failed?failed+' FAILED (son 15)':jobs.length?jobs.length+' kayıt':'Henüz iş yok');
@@ -506,7 +534,15 @@ async function reload(){
     return (s.jobs||[]).some(j=>j.status==='running');
   }catch(e){$('#msg').textContent='Sunucu bağlantısı kurulamadı';return false}
 }
+async function refreshRag(){
+  try{const r=await getJSON('/api/rag-status');const n=+r.embedded_docs||0,m=+r.memory_items||0,t=+r.fts_docs||0,p=+r.pending||0;
+    // Embeddings come from axis_memory (graph nodes + PDF chunks); the FTS index counts documents.
+    const model=String(r.embed_model||''),fts=' · tam metin: '+t+' belge';
+    setSt('rag',r.last_error?'fail':(r.running||p)?'warn':n?'ok':'notrun',n+' / '+m+' kayıt',r.last_error?String(r.last_error):r.running?'gömülüyor ('+model+')'+fts:p?p+' kayıt bekliyor'+fts:n?model+fts:'henüz gömülmedi'+fts)}
+  catch(e){setSt('rag','unknown','—','')}
+}
 async function refreshHealth(){
+  refreshRag();
   try{const [h,cap]=await Promise.all([getJSON('/api/agent-health'),getJSON('/api/capabilities').catch(()=>null)]);
     setSt('ollama',h.ollama_reachable?'ok':'fail',h.ollama_reachable?'Erişilebilir':'Erişilemiyor',h.ollama_reachable?'127.0.0.1:11434':'Ajanlar ve sentez çalışmaz');
     setSt('model',cap&&cap.ollama_model?(h.ollama_reachable?'ok':'notrun'):'unknown',cap&&cap.ollama_model?String(cap.ollama_model):'—',h.ollama_reachable?'':'Model yüklü değil veya Ollama kapalı');
@@ -516,7 +552,7 @@ async function refreshHealth(){
   }catch(e){setSt('ollama','unknown','—',e.message)}
 }
 function dockerState(report){const r=String(report||'');if(!r)return ['notrun','NOT RUN'];if(/^PASS/.test(r))return ['ok','PASS'];if(/^BLOCKED/.test(r))return ['fail','BLOCKED'];if(/^FAIL/.test(r))return ['fail','FAILED'];return ['unknown',r.slice(0,24)]}
-async function refreshApprovals(){await Promise.allSettled([refreshProposals(),v5list(),v9list(),brainPending()])}
+async function refreshApprovals(){await Promise.allSettled([refreshProposals(),v5list(),v9list(),brainPending(),window.AxisV14?AxisV14.runnableLoad():null])}
 
 /* ---------------- Skill proposals (Self-Evolution) ---------------- */
 function proposalRow(x,out){
@@ -542,7 +578,10 @@ function upgradeRow(item,show,place){
   const [ds,dl]=dockerState(item.report),failed=item.status==='pending'&&/^(FAIL|BLOCKED)/.test(String(item.report||''));
   const meta='Docker testi: '+dl+(item.status==='applied'?' · yeniden başlatma gerekli':'')+(item.status==='pending'&&!failed&&dl==='NOT RUN'?' · test sırada':'');
   const {d,acts}=card('Çekirdek güncelleme · '+item.target,item.description||item.target,meta,item.status);
-  acts.append(btn('Farkı incele','',async()=>{try{show(await getJSON('/api/upgrade-detail?id='+encodeURIComponent(item.id)))}catch(e){show(e.message)}}));
+  acts.append(btn('Farkı incele','',async()=>{try{const det=await getJSON('/api/upgrade-detail?id='+encodeURIComponent(item.id));
+    if(typeof det.auto_eligible==='boolean'){const head=d.querySelector('.item-head');let p=head.querySelector('.auto-elig');if(!p){p=el('span','pill auto-elig');head.insertBefore(p,head.querySelector('.item-status'))}
+      p.textContent=det.auto_eligible?'otomatik uygulanabilir':'elle onay gerekir';p.dataset.state=det.auto_eligible?'ok':'warn'}
+    if(typeof det.report==='string'&&det.report){const rest=Object.assign({},det);delete rest.report;show('Test raporu (CONTRACT / BEHAVIOR / SUITE):\n'+det.report+'\n\n'+JSON.stringify(rest,null,2))}else show(det)}catch(e){show(e.message)}}));
   if(failed)acts.append(btn('Reddet','',async()=>{try{await rejectUpgrade(item,show)}catch(e){show(e.message)}}));
   if(item.status==='applied'&&(place==='drawer'||place==='auto'))acts.append(btn('Geri al','btn-danger',async()=>{try{await rollbackUpgrade(item,show)}catch(e){show(e.message)}}));
   return d;
@@ -551,6 +590,7 @@ let autoSeen=null;
 async function refreshAuto(){try{const a=await getJSON('/api/upgrade-auto');const on=!!a.enabled,m=$('#autoMode');
   m.textContent='Otomatik güncelleme: '+(on?'açık':'kapalı');m.dataset.state=on?'ok':'warn';
   setSt('autoupd',on?'ok':'notrun',on?'Açık':'Kapalı',on?'PASS ise uygulanır':'AXIS_AUTO_APPLY=0');
+  {const sc=$('#autoScope');if(sc){const scope=a.auto_scope||'extensions/*.py';sc.textContent='Otomatik uygulama kapsamı: '+scope+' · diğer hedefler (üst düzey modüller) yalnızca senin onayınla uygulanır'+(a.suite_enabled===false?' · tam test paketi kapalı':a.suite_enabled===true?' · tam test paketi açık':'')+'.'}}
   const evs=Array.isArray(a.events)?a.events:[];
   if(autoSeen){for(const e of evs.slice().reverse())if(!autoSeen.has(e.id)){if(e.outcome==='applied'){feed('Otomatik uygulandı: '+e.target+' — '+(e.description||'')+' · yeniden başlatma gerekli','ok',true);toast('Otomatik uygulandı: '+e.target,'ok');markRestart()}else feed('Otomatik uygulanmadı: '+e.target+' — '+(e.detail||''),'fail',true)}}
   autoSeen=new Set(evs.map(e=>e.id));
@@ -609,7 +649,7 @@ async function v4show(fn){const o=$('#v4out');o.textContent='Çalışıyor...';t
 function v4synth(){return v4show(()=>v4post('/api/synthesize',{topic:$('#v4topic').value}))}
 function v4generate(){return v4show(()=>v4post('/api/generate-skill',{skill:$('#v4skill').value,description:$('#v4desc').value}))}
 function v4parallel(){return v4show(()=>v4post('/api/parallel',{tasks:[{tool:'count_nodes'},{tool:'list_recent_research'},{tool:'search_memory',args:{query:$('#v4query').value}}]}))}
-function v4upload(){return v4show(async()=>{const f=$('#v4pdf').files[0];if(!f)throw Error('PDF seç');if(f.size>8000000)throw Error('8 MB sınırı');const b64=await new Promise((ok,fail)=>{const reader=new FileReader();reader.onload=()=>ok(reader.result.split(',')[1]);reader.onerror=fail;reader.readAsDataURL(f)});return v4post('/api/pdf',{filename:f.name,content_base64:b64})})}
+function v4upload(){return v4show(async()=>{const f=$('#v4pdf').files[0];if(!f)throw Error('PDF seç');if(f.size>8000000)throw Error('8 MB sınırı');const b64=await new Promise((ok,fail)=>{const reader=new FileReader();reader.onload=()=>ok(reader.result.split(',')[1]);reader.onerror=fail;reader.readAsDataURL(f)});const r=await v4post('/api/pdf',{filename:f.name,content_base64:b64});if(r&&typeof r.chunks==='number'){const m=r.chunks+' parça bellek dizinine eklendi: '+f.name;toast(m,'ok');feed(m,'ok',true)}return r})}
 
 /* ---------------- Learning layer (V13 dashboard) ---------------- */
 let v13Seen=null;
@@ -670,7 +710,7 @@ function parseIntent(raw){
   const rs=parseResearch(text,n);
   if(rs){
     if(rs.error)return {name:'Araştırma — geçersiz kayıt sayısı',path:'yerel',run:()=>localAnswer(text,rs.error,'Geçersiz sayı')};
-    return {name:'araştır · '+rs.limit+' kayıt',path:'«'+rs.topic+'» · POST /api/research (OpenAlex)',run:()=>cmdResearch(rs.topic,rs.limit)};
+    return {name:'araştır · '+rs.limit+' kayıt',path:'«'+rs.topic+'» · POST /api/research (OpenAlex/arXiv)',run:()=>cmdResearch(rs.topic,rs.limit)};
   }
   return {name:'Soru — yerel model yanıtlar',path:'POST /api/ask ('+(text.length>MAX_Q?'ÇOK UZUN':'yerel Ollama')+')',run:()=>cmdAsk(text)};
 }
@@ -703,9 +743,16 @@ function renderAsks(){
   else{st.hidden=true;txt.textContent=e.status==='local'?e.text:plain(e.result.answer);
     if(e.status==='local'){meta.append(el('span','pill',e.label||'Yerel yanıt'),el('span','','sunucuya gönderilmedi'))}
     else{const r=e.result;if(r.action_refused){const p=el('span','pill','Eylem yapılmadı');p.dataset.state='warn';p.title='AXIS sohbetten hiçbir değişiklik uygulamaz; güncellemeler «Güncellemeler» bölümünde.';meta.append(p)}else if(r.model)meta.append(el('span','pill',r.model));
-      if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Ağda göster: '+m.id;meta.append(b)}}
+      if(r.retrieval&&r.retrieval.mode&&r.retrieval.mode!=='yok'){const m=el('span','pill','arama: '+r.retrieval.mode);m.title='tam metin: '+(r.retrieval.lexical_hits||0)+' · anlamsal: '+(r.retrieval.semantic_hits||0)+(r.retrieval.semantic_note?' ('+r.retrieval.semantic_note+')':'');meta.append(m)}
+      if(Array.isArray(r.sources)&&r.sources.length){meta.append(el('span','','Kaynaklar:'));for(const s of r.sources){const label='['+s.no+'] '+String(s.title).slice(0,60)+(s.year?' ('+s.year+')':'');
+          if(s.node_id){const b=btn(label,'',()=>selectNodeById(String(s.node_id)));b.title='Ağda göster';meta.append(b)}else meta.append(el('span','',label));
+          if(typeof s.url==='string'&&/^https?:\/\//.test(s.url)){const a=el('a','','↗');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';a.title='Kaynağı aç: '+s.url;meta.append(a)}}}
+      else if(Array.isArray(r.used_memory)&&r.used_memory.length){meta.append(el('span','','Bellek:'));for(const m of r.used_memory){if(String(m.id).startsWith('chunk:')){const c=el('span','pill',String(m.label).slice(0,60));c.title='PDF parçası (ağda düğümü yok)';meta.append(c);continue}const b=btn(String(m.label).slice(0,60),'',()=>selectNodeById(String(m.id)));b.title='Ağda göster: '+m.id;meta.append(b)}}
       else if(r.general_knowledge){const g=el('span','pill','genel bilgi');g.dataset.state='warn';g.title='Bellekte ilgili kayıt bulunamadı; yanıt modelin genel bilgisinden.';meta.append(g)}
+      if(r.semantic===true){const sp=el('span','pill','anlamsal bellek');sp.dataset.state='ok';sp.title='Yanıt, anlamsal (gömme tabanlı) bellek aramasından yararlandı';meta.append(sp)}
+      if(typeof r.used_feedback==='number'&&r.used_feedback>0){const fp=el('span','pill',r.used_feedback+' düzeltme dikkate alındı');fp.title='Daha önce verdiğin düzeltmeler bu yanıtta kullanıldı';meta.append(fp)}
       meta.append(el('span','',(typeof r.elapsed_s==='number'?r.elapsed_s.toFixed(1):secs(e))+' sn'))}}
+  if(window.AxisV14)AxisV14.fbRender(e);
   const hist=$('#askHistory');hist.replaceChildren();
   for(const h of asks.slice(1).reverse()){const li=el('li');li.dataset.state=h.status;const a=h.status==='running'?'… bekleniyor ('+secs(h)+' sn)':h.status==='failed'?'FAILED · '+(h.error||''):String(h.status==='local'?h.text:plain(h.result.answer));li.append(el('div','h-q',h.q),el('div','h-a',a.length>280?a.slice(0,280)+'…':a));hist.append(li)}
   $('#historyWrap').hidden=asks.length<2;
@@ -750,16 +797,17 @@ async function cmdResearch(topic,limit){
   pendingResearch.add(key);
   try{
     const r=await fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,limit})});const j=await r.json();if(!r.ok)throw Error(researchDetail(r.status===429?'HTTP 429':j.error||'Hata'));
+    if(j.job_id)myJobs.add(j.job_id);
     researchJobs=[{id:j.job_id,topic,status:'running'},...researchJobs];
-    feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'OpenAlex literatür araştırması başladı: «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');await reload();
+    feed('Araştırma çalışıyor: '+topic+' ('+limit+' kayıt)','info');localAnswer('araştır '+limit+' '+topic,'Literatür araştırması başladı (OpenAlex; kota dolarsa arXiv): «'+topic+'» · '+limit+' kayıt istendi. Kayıtlar «Ağ» bölümündeki bilgi katmanında görünecek. Sonra «'+topic+' hakkında ne biliyorsun?» diye sorabilirsin.','Araştırma');await reload();
   }finally{pendingResearch.delete(key)}
 }
 function help(){localAnswer('yardım',['Soru yaz → yerel model (Ollama) AXIS belleğini kullanarak Türkçe yanıtlar.','','araştır <konu> · araştır 100 <konu> · <konu> hakkında 30 makale → OpenAlex literatür araması (varsayılan 50, en çok 200 kayıt)','hafızada ara <kavram> → bellekte etiket araması','sentezle <konu> → araştırılmış konunun literatür sentezi','durum · öneriler · sinir ağı a=1 b=0 · bilgi ağı · beceri ağı · öğrenme · araçlar','','«uygula», «onayla», «düzelt» gibi eylem istekleri komut satırından yapılmaz.'].join('\n'),'Yardım')}
 
 /* ---------------- Navigation rail, hash routing, theme ---------------- */
-const TABS=['chat','ag','updates','system','tools'];
-const TAB_HASH={chat:'sohbet',ag:'ag',updates:'guncellemeler',system:'sistem',tools:'araclar'};
-const TITLES={chat:'Sohbet',ag:'Ağ',updates:'Güncellemeler',system:'Sistem',tools:'Araçlar'};
+const TABS=['chat','ag','updates','trace','system','tools'];
+const TAB_HASH={chat:'sohbet',ag:'ag',updates:'guncellemeler',trace:'gorev-izi',system:'sistem',tools:'araclar'};
+const TITLES={chat:'Sohbet',ag:'Ağ',updates:'Güncellemeler',trace:'Görev izi',system:'Sistem',tools:'Araçlar'};
 let currentTab='chat';
 function tabFromHash(h){h=String(h||'').replace(/^#/,'');for(const [t,v] of Object.entries(TAB_HASH))if(v===h)return t;return null}
 function railButtons(){return [...document.querySelectorAll('#rail [data-tab]')]}
@@ -772,6 +820,7 @@ function switchTab(t,focus){
   $('#viewTitle').textContent=TITLES[t];document.title=TITLES[t]+' · AXIS';placeIndicator();
   if(t==='ag'){if(!graphMounted&&!graphFailed){ensureGraph();pushLayers()}if(netStale||Date.now()-netLoadedAt>15000)loadNetwork()}
   if(t==='tools'&&prev!=='tools')brainLoad();
+  if(t==='trace'&&prev!=='trace'&&window.AxisV14)AxisV14.traceLoad();
   try{localStorage.setItem('axis-tab',t)}catch(e){}
   if(location.hash!=='#'+TAB_HASH[t])try{history.replaceState(null,'','#'+TAB_HASH[t])}catch(e){}
 }
@@ -781,7 +830,7 @@ $('#rail').addEventListener('keydown',e=>{const i=TABS.indexOf(currentTab);let j
   if(j!==null){e.preventDefault();switchTab(TABS[j],true)}});
 window.addEventListener('hashchange',()=>{const t=tabFromHash(location.hash);if(t&&t!==currentTab)switchTab(t)});
 document.addEventListener('keydown',e=>{
-  if((e.ctrlKey||e.altKey)&&!e.shiftKey&&!e.metaKey&&/^[1-5]$/.test(e.key)){e.preventDefault();switchTab(TABS[+e.key-1],true);return}
+  if((e.ctrlKey||e.altKey)&&!e.shiftKey&&!e.metaKey&&/^[1-6]$/.test(e.key)){e.preventDefault();switchTab(TABS[+e.key-1],true);return}
   if(e.key==='/'&&currentTab!=='ag'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){e.preventDefault();switchTab('chat');cmdInput.focus()}
 });
 /* rail width: user choice, else expanded only on wide screens */
@@ -804,8 +853,11 @@ document.querySelectorAll('pre.console').forEach(x=>{mark(x);new MutationObserve
 })();
 
 /* ---------------- Scheduler: automatic, read-only, paused when hidden ---------------- */
-const TASKS=[{fn:reload,every:()=>5000},{fn:refreshApprovals,every:()=>20000},{fn:refreshHealth,every:()=>30000},{fn:v13Tick,every:()=>currentTab==='ag'?10000:30000}];
+const TASKS=[{fn:reload,every:()=>5000},{fn:refreshApprovals,every:()=>20000},{fn:refreshHealth,every:()=>30000},{fn:v13Tick,every:()=>currentTab==='ag'?10000:30000},
+  {fn:()=>window.AxisV14&&AxisV14.memoryTick(),every:()=>30000},
+  {fn:()=>window.AxisV14&&AxisV14.traceTick(),every:()=>5000}];/* trace refreshes only while its tab is visible */
 for(const t of TASKS){t.last=t.fn===v13Tick?Date.now():0;t.busy=false}
+{const mb=$('#memBackfill');if(mb)mb.addEventListener('click',async()=>{mb.disabled=true;try{if(window.AxisV14)await AxisV14.memoryBackfill()}finally{mb.disabled=false}})}
 function tick(force){if(document.hidden)return;const now=Date.now();for(const t of TASKS){if(t.busy)continue;if(force||now-t.last>=t.every()){t.busy=true;t.last=now;Promise.resolve().then(t.fn).catch(()=>{}).finally(()=>{t.busy=false})}}}
 setInterval(()=>tick(false),1000);
 document.addEventListener('visibilitychange',()=>{$('#pollState').textContent=document.hidden?'duraklatıldı':'açık';if(!document.hidden)tick(true)});

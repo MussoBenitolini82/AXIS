@@ -22,7 +22,7 @@ class UICommandTests(unittest.TestCase):
         detail = self.html.split('function researchDetail(detail)', 1)[1].split('\n', 1)[0]
         command = self.html.split('async function cmdResearch(topic,limit)', 1)[1].split('\nfunction help()', 1)[0]
         return ("const assert=require('node:assert/strict');\n"
-                "const RESEARCH_DEFAULT=50,pendingResearch=new Set();let researchJobs=[];"
+                "const RESEARCH_DEFAULT=50,pendingResearch=new Set(),myJobs=new Set();let researchJobs=[];"
                 "const answers=[];function localAnswer(...args){answers.push(args)}"
                 "function feed(){} async function reload(){}\n"
                 'function norm(s)' + norm + '\nfunction researchDetail(detail)' + detail +
@@ -43,6 +43,8 @@ class UICommandTests(unittest.TestCase):
           await cmdResearch('sinir   ağı',50);
           assert.equal(calls,1);assert.match(answers[0][1],/zaten sürüyor/);
           release();await first;
+          assert.deepEqual([...myJobs],['j1']);
+          assert.match(answers[1][1],/arXiv/);
           await cmdResearch('SİNİR AĞI',100);
           assert.equal(calls,1);assert.equal(pendingResearch.size,0);
           researchJobs=[];
@@ -55,7 +57,7 @@ class UICommandTests(unittest.TestCase):
         (async()=>{
           global.fetch=async()=>({ok:false,status:429,json:async()=>({error:'Too Many Requests'})});
           await assert.rejects(cmdResearch('sinir ağı',50), /OpenAlex.*HTTP 429/);
-          assert.equal(pendingResearch.size,0);assert.equal(researchJobs.length,0);
+          assert.equal(pendingResearch.size,0);assert.equal(researchJobs.length,0);assert.equal(myJobs.size,0);
           assert.match(researchDetail('HTTP Error 429: Too Many Requests'), /Bir süre bekleyip/);
           assert.equal(researchDetail('3 akademik kayıt işlendi'),'3 akademik kayıt işlendi');
           assert.equal(researchDetail('429 akademik kayıt işlendi'),'429 akademik kayıt işlendi');
@@ -63,6 +65,25 @@ class UICommandTests(unittest.TestCase):
           await assert.rejects(cmdResearch('sinir ağı',50),/offline/);
           assert.equal(pendingResearch.size,0);
         })().catch(e=>{console.error(e);process.exitCode=1});
+        """)
+
+    def test_tracked_research_notices_preserve_fallback_details_once(self):
+        render = self.html.split('function renderJobs(jobs){', 1)[1].split('\nasync function reload()', 1)[0]
+        self.run_js(self.research_source() + """
+        let jobSeen=new Map();
+        const root={replaceChildren(){},append(){}};
+        const $=()=>root;
+        function el(){return {dataset:{}}}function toast(){}function setSt(){}
+        function renderJobs(jobs){
+        """ + render + """
+        myJobs.add('done');myJobs.add('failed');
+        const jobs=[{id:'done',topic:'konu',status:'completed',details:'OpenAlex HTTP 429; arXiv: 10 kayıt'},
+                    {id:'failed',topic:'diğer',status:'failed',details:'HTTP Error 429: Too Many Requests'}];
+        renderJobs(jobs);
+        assert.equal(myJobs.size,0);assert.equal(answers.length,2);
+        assert.match(answers[0][1],/arXiv: 10 kayıt/);
+        assert.equal(answers[1][3],'failed');assert.match(answers[1][1],/Bir süre bekleyip/);
+        renderJobs(jobs);assert.equal(answers.length,2);
         """)
 
     def test_enter_reentry_blocked_and_new_draft_preserved(self):
